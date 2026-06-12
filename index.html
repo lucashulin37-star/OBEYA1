@@ -551,13 +551,17 @@ let SITE_ID = null;
 async function getSiteId(token) {
   if (SITE_ID) return SITE_ID;
 
-  const url = GRAPH + `/sites/${SHAREPOINT_HOST}:/sites/${SHAREPOINT_SITE}`;
-
+const url = GRAPH + `/sites/${SHAREPOINT_HOST}:/sites/AltradEndel-DevCommerceARIANEGROUP2`;
   const r = await fetch(url, {
     headers: { Authorization: 'Bearer ' + token }
   });
 
-  if (!r.ok) throw new Error('Impossible de récupérer le site SharePoint');
+ if (!r.ok) {
+  const txt = await r.text();
+  console.error("Graph error:", txt);
+  throw new Error('Impossible de récupérer le site SharePoint');
+}
+
 
   const data = await r.json();
   SITE_ID = data.id;

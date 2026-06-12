@@ -542,36 +542,116 @@ let activeFilter='all', editNoteId=null, activeTab='cols', dragSrc=null, isSavin
 // GRAPH API
 // ══════════════════════════════════════════════
 const GRAPH='https://graph.microsoft.com/v1.0';
+// ✅ ID du site SharePoint (à remplacer une seule fois)
+const SHAREPOINT_HOST = "hertel.sharepoint.com";
+const SHAREPOINT_SITE = "AltradEndel-DevCommerceARIANEGROUP2";
+const SHAREPOINT_FOLDER = "Shared Documents/Fichier sauvegarde";
 
+let SITE_ID = null;
+async function getSiteId(token) {
+  if (SITE_ID) return SITE_ID;
+
+  const url = GRAPH + `/sites/${SHAREPOINT_HOST}:/sites/${SHAREPOINT_SITE}`;
+
+  const r = await fetch(url, {
+    headers: { Authorization: 'Bearer ' + token }
+  });
+
+  if (!r.ok) throw new Error('Impossible de récupérer le site SharePoint');
+
+  const data = await r.json();
+  SITE_ID = data.id;
+
+  console.log("SITE_ID =", SITE_ID);
+
+  return SITE_ID;
+}
+async function getFilePath(token, fileName) {
+  const siteId = await getSiteId(token);
+
+  return `/sites/${siteId}/drive/root:/${SHAREPOINT_FOLDER}/${encodeURIComponent(fileName)}:/content`;
+}
+
+  
 async function loadData() {
   setSyncState('loading','Chargement…');
+
   try {
     const token = await getToken();
     const fileName = CONFIG.fileName || 'obeya_data.json';
-    const r = await fetch(GRAPH+'/me/drive/root:/'+encodeURIComponent(fileName)+':/content',
-      {headers:{Authorization:'Bearer '+token}});
-    if (r.status === 404) { applyTheme(); renderBoard(); setSyncState('ok','Nouveau tableau ✓'); await saveData(); return; }
-    if (!r.ok) throw new Error('HTTP '+r.status);
+
+    const path = await getFilePath(token, fileName);
+
+    const r = await fetch(GRAPH + path, {
+      headers: { Authorization: 'Bearer ' + token }
+    });
+
+    // 👉 fichier inexistant => création auto
+    if (r.status === 404) {
+      applyTheme();
+      renderBoard();
+      setSyncState('ok','Nouveau tableau SharePoint ✓');
+      await saveData();
+      return;
+    }
+
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+
     const data = await r.json();
-    if (data?.cols) { state = Object.assign(state, data); state.cols=(state.cols||[]).map(c=>({bg:lighten(c.color),...c})); }
-    applyTheme(); renderBoard(); setSyncState('ok','Synchronisé ✓');
+
+    if (data?.cols) {
+      state = Object.assign(state, data);
+      state.cols = (state.cols || []).map(c => ({
+        bg: lighten(c.color),
+        ...c
+      }));
+    }
+
+    applyTheme();
+    renderBoard();
+    setSyncState('ok','Synchronisé SharePoint ✓');
+
   } catch(e) {
-    console.error(e); setSyncState('error','Erreur : '+e.message); renderBoard();
+    console.error(e);
+    setSyncState('error','Erreur : ' + e.message);
+    renderBoard();
   }
 }
 
 async function saveData() {
-  if (isSaving) return; isSaving=true; setSyncState('loading','Sauvegarde…');
+  if (isSaving) return;
+
+  isSaving = true;
+  setSyncState('loading','Sauvegarde SharePoint…');
+
   try {
     const token = await getToken();
     const fileName = CONFIG.fileName || 'obeya_data.json';
-    const r = await fetch(GRAPH+'/me/drive/root:/'+encodeURIComponent(fileName)+':/content',
-      {method:'PUT', headers:{Authorization:'Bearer '+token,'Content-Type':'application/json'}, body:JSON.stringify(state)});
-    if (!r.ok) throw new Error('HTTP '+r.status);
-    setSyncState('ok','Sauvegardé ✓');
-  } catch(e) { console.error(e); setSyncState('error','Erreur sauvegarde'); } 
-  finally { isSaving=false; }
+
+    const path = await getFilePath(token, fileName);
+
+    const r = await fetch(GRAPH + path, {
+      method: 'PUT',
+      headers: {
+        Authorization: 'Bearer ' + token,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(state)
+    });
+
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+
+    setSyncState('ok','Sauvegardé SharePoint ✓');
+
+  } catch(e) {
+    console.error(e);
+    setSyncState('error','Erreur sauvegarde');
+
+  } finally {
+    isSaving = false;
+  }
 }
+
 
 const VERSION_KEY='obeya_versions';
 function saveVersion() {

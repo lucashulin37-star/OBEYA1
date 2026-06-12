@@ -548,7 +548,7 @@ async function loadData() {
   try {
     const token = await getToken();
     const fileName = CONFIG.fileName || 'obeya_data.json';
-const r = await fetch(GRAPH + "/sites/hertel.sharepoint.com:/sites/AltradEndel-DevCommerceARIANEGROUP2:/drive/root:/Shared%20Documents/Fichier%20sauvegarde/" + encodeURIComponent(fileName) + ":/content",
+const r = await fetch(GRAPH + "/sites/hertel.sharepoint.com:/sites/AltradEndel-DevCommerceARIANEGROUP2:/drive/root:/Fichier%20sauvegarde/" + encodeURIComponent(fileName) + ":/content",
   { headers:{ Authorization:'Bearer '+token } }
 );
     
@@ -567,7 +567,7 @@ async function saveData() {
   try {
     const token = await getToken();
     const fileName = CONFIG.fileName || 'obeya_data.json';
-const r = await fetch(GRAPH + "/sites/hertel.sharepoint.com:/sites/AltradEndel-DevCommerceARIANEGROUP2:/drive/root:/Shared%20Documents/Fichier%20sauvegarde/" + encodeURIComponent(fileName) + ":/content",
+const r = await fetch(GRAPH + "/sites/hertel.sharepoint.com:/sites/AltradEndel-DevCommerceARIANEGROUP2:/drive/root:/Fichier%20sauvegarde/" + encodeURIComponent(fileName) + ":/content",
   {
     method:'PUT',
     headers:{

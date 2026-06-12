@@ -439,14 +439,14 @@ async function msalLogin() {
 
     if (accounts.length > 0) {
       result = await msalInstance.acquireTokenSilent({
-        scopes: ['User.Read', 'Files.ReadWrite',],
+        scopes: ['User.Read', 'Files.ReadWrite','Sites.ReadWrite.All],
         account: accounts[0],
       }).catch(() => null);
     }
 
     if (!result) {
       result = await msalInstance.loginPopup({
-        scopes: ['User.Read', 'Files.ReadWrite','Sites.ReadWrite.All,],
+        scopes: ['User.Read', 'Files.ReadWrite','Sites.ReadWrite.All],
       });
     }
 

@@ -569,8 +569,9 @@ async function getSiteId(token) {
 async function getFilePath(token, fileName) {
   const siteId = await getSiteId(token);
 
-  return `/sites/${siteId}/drive/root:/${SHAREPOINT_FOLDER}/${encodeURIComponent(fileName)}:/content`;
-}
+const safeFolder = encodeURI(SHAREPOINT_FOLDER);
+
+return `/sites/${siteId}/drive/root:/${safeFolder}/${encodeURIComponent(fileName)}:/content`;
 
   
 async function loadData() {

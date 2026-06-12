@@ -790,11 +790,9 @@ window.addEventListener('load', async () => {
 
   document.getElementById('loading-screen').style.display = 'none';
 
-  if (!msalLoaded) {
-    // MSAL non chargeable = environnement sandbox ou réseau bloquant le CDN
-    document.getElementById('error-screen').style.display = 'flex';
-    return;
-  }
+if (!msalLoaded) {
+  console.warn("MSAL non chargé, mais on continue");
+}
 
   if (!CONFIG) {
     // Première utilisation

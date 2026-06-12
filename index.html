@@ -572,7 +572,7 @@ async function getFilePath(token, fileName) {
 const safeFolder = encodeURI(SHAREPOINT_FOLDER);
 
 return `/sites/${siteId}/drive/root:/${safeFolder}/${encodeURIComponent(fileName)}:/content`;
-
+}
   
 async function loadData() {
   setSyncState('loading','Chargement…');

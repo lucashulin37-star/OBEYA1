@@ -473,7 +473,7 @@ async function getToken() {
   try {
     const accounts = msalInstance.getAllAccounts();
     if (!accounts.length) return null;
-    const r = await msalInstance.acquireTokenSilent({ scopes: ['Files.ReadWrite.All', 'Sites.ReadWrite.All'], account: accounts[0] });
+    const r = await msalInstance.acquireTokenSilent({ scopes: ['User.Read', 'Files.ReadWrite','Sites.ReadWrite.All'], account: accounts[0] });
     return r.accessToken;
   } catch { return null; }
 }
@@ -897,7 +897,7 @@ if (!msalLoaded) {
     const accounts = msalInstance.getAllAccounts();
     if (accounts.length > 0) {
       const result = await msalInstance.acquireTokenSilent({
-        scopes:['User.Read','Files.ReadWrite'], account:accounts[0]
+            scopes: ['User.Read', 'Files.ReadWrite','Sites.ReadWrite.All'], account:accounts[0]
       }).catch(()=>null);
       if (result) {
         accessToken = result.accessToken;

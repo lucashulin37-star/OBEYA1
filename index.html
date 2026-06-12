@@ -196,30 +196,6 @@ body { font-family: system-ui, -apple-system, sans-serif; background: var(--app-
   <div style="font-size:13px;color:#9e9e9b">Chargement de l'application…</div>
 </div>
 
-<!-- ÉCRAN D'ERREUR ENVIRONNEMENT -->
-<div id="error-screen">
-  <div class="error-card">
-    <div style="font-size:36px;margin-bottom:12px">⚠️</div>
-    <h2>Environnement non compatible</h2>
-    <p>Ce fichier ne peut pas s'exécuter depuis la prévisualisation SharePoint (iframe sandboxé). Il doit être hébergé sur un vrai serveur web.</p>
-    <div class="error-steps">
-      <strong>Solution recommandée : Azure Static Web Apps (gratuit)</strong><br>
-      1. Allez sur <strong>portal.azure.com</strong> → Créer → "Static Web Apps"<br>
-      2. Choisissez le plan <strong>Free</strong><br>
-      3. Source : uploadez le fichier HTML directement<br>
-      4. Copiez l'URL générée (ex: <em>xxx.azurestaticapps.net</em>)<br>
-      5. Mettez cette URL dans Azure AD → App registrations → Redirect URI<br><br>
-      <strong>Alternative rapide : GitHub Pages</strong><br>
-      1. Créez un repo GitHub public<br>
-      2. Uploadez le fichier HTML<br>
-      3. Settings → Pages → Deploy from branch
-    </div>
-    <button class="btn btn-primary" onclick="document.getElementById('error-screen').style.display='none';document.getElementById('login-screen').style.display='flex';" style="margin-top:16px;width:100%;justify-content:center">
-      Essayer quand même
-    </button>
-  </div>
-</div>
-
 <!-- ÉCRAN DE CONNEXION -->
 <div id="login-screen">
   <div class="login-card">

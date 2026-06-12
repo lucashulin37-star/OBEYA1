@@ -548,7 +548,7 @@ async function loadData() {
   try {
     const token = await getToken();
     const fileName = CONFIG.fileName || 'obeya_data.json';
-    const r = await fetch(GRAPH + "/sites/hertel.sharepoint.com:/sites/AltradEndel-DevCommerceARIANEGROUP2:/drive/root:/Shared%20Documents/Fichier%20sauvegarde/" + encodeURIComponent(fileName) + ":/content",
+    const r = await fetch(GRAPH + "//hertel.sharepoint.com/:f:/r/sites/AltradEndel-DevCommerceARIANEGROUP2/Shared%20Documents/Fichier%20sauvegarde/" + encodeURIComponent(fileName) + ":/content",
       {headers:{Authorization:'Bearer '+token}});
     if (r.status === 404) { applyTheme(); renderBoard(); setSyncState('ok','Nouveau tableau ✓'); await saveData(); return; }
     if (!r.ok) throw new Error('HTTP '+r.status);
@@ -565,7 +565,7 @@ async function saveData() {
   try {
     const token = await getToken();
     const fileName = CONFIG.fileName || 'obeya_data.json';
-    const r = await fetch(GRAPH + "/sites/hertel.sharepoint.com:/sites/AltradEndel-DevCommerceARIANEGROUP2:/drive/root:/Shared%20Documents/Fichier%20sauvegarde/" + encodeURIComponent(fileName) + ":/content",
+    const r = await fetch(GRAPH + "//hertel.sharepoint.com/:f:/r/sites/AltradEndel-DevCommerceARIANEGROUP2/Shared%20Documents/Fichier%20sauvegarde/" + encodeURIComponent(fileName) +":/content",
       {method:'PUT', headers:{Authorization:'Bearer '+token,'Content-Type':'application/json'}, body:JSON.stringify(state)});
     if (!r.ok) throw new Error('HTTP '+r.status);
     setSyncState('ok','Sauvegardé ✓');

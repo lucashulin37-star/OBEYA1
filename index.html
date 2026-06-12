@@ -329,6 +329,17 @@ body { font-family: system-ui, -apple-system, sans-serif; background: var(--app-
 <div id="toast" class="toast" style="opacity:0"></div>
 
 <script>
+  fetch("https://graph.microsoft.com/v1.0/sites/hertel.sharepoint.com:/sites/AltradEndel-DevCommerceARIANEGROUP2", {
+  headers: { Authorization: "Bearer " + accessToken }
+})
+.then(r => r.json())
+.then(site => {
+  return fetch("https://graph.microsoft.com/v1.0/sites/" + site.id + "/drives", {
+    headers: { Authorization: "Bearer " + accessToken }
+  });
+})
+.then(r => r.json())
+.then(console.log);
 // ══════════════════════════════════════════════
 // STORAGE ABSTRACTION
 // Tente localStorage, fallback sessionStorage, fallback mémoire

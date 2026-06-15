@@ -275,6 +275,12 @@ body { font-family: system-ui, -apple-system, sans-serif; background: var(--app-
   <div class="filter-chip" data-f="urgent" onclick="setFilter('urgent')">🔴 Urgent</div>
   <div class="filter-chip" data-f="normal" onclick="setFilter('normal')">🟡 Normal</div>
   <div class="filter-chip" data-f="faible" onclick="setFilter('faible')">🟢 Faible</div>
+  <div style="display:flex;align-items:center;gap:6px;margin-left:6px">
+    <span style="font-size:12px;color:#9e9e9b">Personne :</span>
+    <select id="person-filter" onchange="setPersonFilter(this.value)" style="font-size:12px;padding:5px 8px;border:1px solid #e0ddd6;border-radius:var(--radius);background:#fff;color:#1a1a18;cursor:pointer">
+      <option value="all">Toutes</option>
+    </select>
+  </div>
   <div class="spacer"></div>
   <div class="search-wrap">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
@@ -539,7 +545,7 @@ let state = {
   notes:[], nextId:1, nextColId:4, nextPersonId:4,
 };
 const PRIO_COLOR = {urgent:'#E24B4A', normal:'#EF9F27', faible:'#3B6D11'};
-let activeFilter='all', editNoteId=null, activeTab='cols', dragSrc=null, isSaving=false;
+let activeFilter='all', activePersonFilter='all', editNoteId=null, activeTab='cols', dragSrc=null, isSaving=false;
 
 // ══════════════════════════════════════════════
 // GRAPH API
@@ -793,11 +799,16 @@ function renderBoard() {
   const search=(document.getElementById('search-input')?.value||'').toLowerCase();
   const board=document.getElementById('board'); if(!board)return;
   board.innerHTML='';
+  renderPersonFilter();
   state.cols.forEach(col=>{
     const colBg=col.bg||lighten(col.color), colBorder=darken(colBg,28), colText=darken(colBg,140);
     const colNotes=state.notes.filter(n=>{
       if(n.col!==col.id)return false;
       if(activeFilter!=='all'&&n.prio!==activeFilter)return false;
+      if(activePersonFilter!=='all'){
+        if(activePersonFilter==='__unassigned__'){ if(n.assigneeId) return false; }
+        else if(n.assigneeId!==activePersonFilter) return false;
+      }
       if(search){const hay=[n.title,n.body,n.from,n.assignee].join(' ').toLowerCase(); if(!hay.includes(search))return false;}
       return true;
     });
@@ -808,12 +819,15 @@ function renderBoard() {
     if(colNotes.length===0){body.innerHTML='<div class="empty">Aucun post-it</div>';}
     else colNotes.forEach(n=>{
       const ed=canEdit(n);
-      const s=document.createElement('div'); s.className='sticky'+(ed?'':' readonly');
-      s.style.cssText=`background:${colBg};border-color:${colBorder};color:${colText}`;
-      s.draggable=ed; s.dataset.id=n.id;
       const person=state.people.find(p=>p.id===n.assigneeId);
+      let noteBg, noteBorder, noteText;
+      if(person){ noteBg=lighten(person.color); noteBorder=darken(noteBg,28); noteText=darken(noteBg,140); }
+      else { noteBg=colBg; noteBorder=colBorder; noteText=colText; }
+      const s=document.createElement('div'); s.className='sticky'+(ed?'':' readonly');
+      s.style.cssText=`background:${noteBg};border-color:${noteBorder};color:${noteText}`;
+      s.draggable=ed; s.dataset.id=n.id;
       const assigneeHtml=person?`<span class="avatar" style="background:${lighten(person.color)};color:${darken(person.color,60)}">${initials(person.name)}</span><span style="font-size:10px;font-weight:500">${esc(person.name)}</span>`:`<span style="opacity:.5">Non assigné</span>`;
-      s.innerHTML=`${ed?`<button class="sticky-del" onclick="deleteNote(${n.id},event)" title="Supprimer">✕</button>`:''}<div class="sticky-title">${esc(n.title)}</div>${n.body?`<div class="sticky-body">${esc(n.body)}</div>`:''}<div class="sticky-footer"><div style="display:flex;align-items:center;gap:5px">${assigneeHtml}</div><span style="opacity:.55">${n.date||''}</span></div><div style="margin-top:5px;display:flex;align-items:center;gap:5px"><span class="prio-dot" style="background:${PRIO_COLOR[n.prio]}"></span><span class="sticky-tag" style="background:${colBorder};color:${colText}">${n.prio.charAt(0).toUpperCase()+n.prio.slice(1)}</span>${n.from?`<span style="font-size:10px;opacity:.6">de ${esc(n.from)}</span>`:''}</div>`;
+      s.innerHTML=`${ed?`<button class="sticky-del" onclick="deleteNote(${n.id},event)" title="Supprimer">✕</button>`:''}<div class="sticky-title">${esc(n.title)}</div>${n.body?`<div class="sticky-body">${esc(n.body)}</div>`:''}<div class="sticky-footer"><div style="display:flex;align-items:center;gap:5px">${assigneeHtml}</div><span style="opacity:.55">${n.date||''}</span></div><div style="margin-top:5px;display:flex;align-items:center;gap:5px"><span class="prio-dot" style="background:${PRIO_COLOR[n.prio]}"></span><span class="sticky-tag" style="background:${noteBorder};color:${noteText}">${n.prio.charAt(0).toUpperCase()+n.prio.slice(1)}</span>${n.from?`<span style="font-size:10px;opacity:.6">de ${esc(n.from)}</span>`:''}</div>`;
       if(ed){s.addEventListener('click',()=>openNoteModal(col.id,n)); s.addEventListener('dragstart',e=>{dragSrc=n.id;e.dataTransfer.effectAllowed='move';});}
       else s.addEventListener('click',()=>openNoteReadonly(n));
       body.appendChild(s);
@@ -825,6 +839,19 @@ function renderBoard() {
   });
 }
 function setFilter(f){activeFilter=f; document.querySelectorAll('.filter-chip').forEach(c=>c.classList.toggle('active',c.dataset.f===f)); renderBoard();}
+function setPersonFilter(v){activePersonFilter=v; renderBoard();}
+function renderPersonFilter(){
+  const sel=document.getElementById('person-filter'); if(!sel)return;
+  if(activePersonFilter!=='all'&&activePersonFilter!=='__unassigned__'&&!state.people.find(p=>p.id===activePersonFilter)){
+    activePersonFilter='all';
+  }
+  const cur=activePersonFilter;
+  const opts=['<option value="all">Toutes</option>','<option value="__unassigned__">Non assigné</option>']
+    .concat(state.people.map(p=>`<option value="${p.id}">${esc(p.name)}</option>`));
+  const html=opts.join('');
+  if(sel.innerHTML!==html) sel.innerHTML=html;
+  sel.value=cur;
+}
 
 // ══════════════════════════════════════════════
 // MODALS

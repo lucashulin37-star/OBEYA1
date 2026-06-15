@@ -260,6 +260,8 @@ body { font-family: system-ui, -apple-system, sans-serif; background: var(--app-
     </div>
     <button class="btn" onclick="openHistory()">🕘 Historique</button>
     <button class="btn" id="settings-btn" onclick="openSettings()" style="display:none">⚙️ Paramètres</button>
+    <button class="btn" onclick="manualRefresh()" title="Recharger les données depuis SharePoint">🔄 Actualiser</button>
+    <button class="btn" onclick="reconnect()" title="Forcer une nouvelle connexion Microsoft">🔑 Se reconnecter</button>
     <div class="sync-status">
       <span class="sync-dot" id="sync-dot"></span>
       <span id="sync-label">…</span>
@@ -460,6 +462,7 @@ async function msalLogin() {
 
     showApp();
     await loadData();
+    startAutoRefresh();
 
   } catch (err) {
     console.error('Login error', err);
@@ -551,17 +554,16 @@ let SITE_ID = null;
 async function getSiteId(token) {
   if (SITE_ID) return SITE_ID;
 
-const url = GRAPH + `/sites/${SHAREPOINT_HOST}:/sites/AltradEndel-DevCommerceARIANEGROUP2`;
+  const url = GRAPH + `/sites/${SHAREPOINT_HOST}:/sites/${SHAREPOINT_SITE}`;
   const r = await fetch(url, {
     headers: { Authorization: 'Bearer ' + token }
   });
 
- if (!r.ok) {
-  const txt = await r.text();
-  console.error("Graph error:", txt);
-  throw new Error('Impossible de récupérer le site SharePoint');
-}
-
+  if (!r.ok) {
+    const txt = await r.text();
+    console.error("Graph error (getSiteId):", r.status, txt);
+    throw new Error(`Site SharePoint introuvable (HTTP ${r.status}) — vérifiez les droits d'accès au site ou le consentement admin des permissions Sites.ReadWrite.All`);
+  }
 
   const data = await r.json();
   SITE_ID = data.id;
@@ -578,11 +580,15 @@ const safeFolder = encodeURI(SHAREPOINT_FOLDER);
 return `/sites/${siteId}/drive/root:/${safeFolder}/${encodeURIComponent(fileName)}:/content`;
 }
   
+let lastSyncTime = null;
+
 async function loadData() {
   setSyncState('loading','Chargement…');
 
   try {
     const token = await getToken();
+    if (!token) throw new Error('Session expirée — cliquez sur "Se reconnecter"');
+
     const fileName = CONFIG.fileName || 'obeya_data.json';
 
     const path = await getFilePath(token, fileName);
@@ -595,12 +601,17 @@ async function loadData() {
     if (r.status === 404) {
       applyTheme();
       renderBoard();
+      lastSyncTime = new Date();
       setSyncState('ok','Nouveau tableau SharePoint ✓');
       await saveData();
       return;
     }
 
-    if (!r.ok) throw new Error('HTTP ' + r.status);
+    if (!r.ok) {
+      const txt = await r.text();
+      console.error('Graph error (loadData):', r.status, txt);
+      throw new Error(`HTTP ${r.status} lors du chargement`);
+    }
 
     const data = await r.json();
 
@@ -614,7 +625,8 @@ async function loadData() {
 
     applyTheme();
     renderBoard();
-    setSyncState('ok','Synchronisé SharePoint ✓');
+    lastSyncTime = new Date();
+    setSyncState('ok','Synchronisé ✓ ' + lastSyncTime.toLocaleTimeString());
 
   } catch(e) {
     console.error(e);
@@ -631,6 +643,8 @@ async function saveData() {
 
   try {
     const token = await getToken();
+    if (!token) throw new Error('Session expirée — cliquez sur "Se reconnecter"');
+
     const fileName = CONFIG.fileName || 'obeya_data.json';
 
     const path = await getFilePath(token, fileName);
@@ -644,13 +658,18 @@ async function saveData() {
       body: JSON.stringify(state)
     });
 
-    if (!r.ok) throw new Error('HTTP ' + r.status);
+    if (!r.ok) {
+      const txt = await r.text();
+      console.error('Graph error (saveData):', r.status, txt);
+      throw new Error(`HTTP ${r.status} lors de la sauvegarde`);
+    }
 
-    setSyncState('ok','Sauvegardé SharePoint ✓');
+    lastSyncTime = new Date();
+    setSyncState('ok','Sauvegardé ✓ ' + lastSyncTime.toLocaleTimeString());
 
   } catch(e) {
     console.error(e);
-    setSyncState('error','Erreur sauvegarde');
+    setSyncState('error','Erreur sauvegarde : ' + e.message);
 
   } finally {
     isSaving = false;
@@ -672,6 +691,51 @@ function setSyncState(s,l) {
   const d=document.getElementById('sync-dot'); if(!d)return;
   d.className='sync-dot'+(s!=='ok'?' '+s:'');
   document.getElementById('sync-label').textContent=l;
+}
+
+// ══════════════════════════════════════════════
+// SYNCHRONISATION TEMPS RÉEL (polling)
+// ══════════════════════════════════════════════
+const REFRESH_INTERVAL_MS = 20000; // 20 secondes
+let refreshTimer = null;
+
+function isAnyOverlayOpen() {
+  if (document.getElementById('note-overlay')) return true;
+  if (document.querySelector('.overlay')) return true;
+  if (document.getElementById('side-panel')?.classList.contains('open')) return true;
+  return false;
+}
+
+function startAutoRefresh() {
+  if (refreshTimer) clearInterval(refreshTimer);
+  refreshTimer = setInterval(() => {
+    if (isSaving) return;
+    if (isAnyOverlayOpen()) return; // on ne perturbe pas un utilisateur en train d'éditer
+    loadData();
+  }, REFRESH_INTERVAL_MS);
+}
+
+// Bouton "🔄 Actualiser" — forcé même si une fenêtre est ouverte
+async function manualRefresh() {
+  await loadData();
+  showToast('Données actualisées ✓');
+}
+
+// Bouton "🔑 Se reconnecter" — nettoie le cache MSAL et relance une authentification propre
+function reconnect() {
+  try {
+    ['localStorage','sessionStorage'].forEach(storeName => {
+      try {
+        const store = window[storeName];
+        const keys = Object.keys(store);
+        keys.forEach(k => {
+          if (/msal/i.test(k)) store.removeItem(k);
+        });
+      } catch{}
+    });
+  } catch(e) { console.error('Erreur nettoyage cache', e); }
+  if (refreshTimer) clearInterval(refreshTimer);
+  location.reload();
 }
 
 // ══════════════════════════════════════════════
@@ -905,7 +969,7 @@ if (!msalLoaded) {
         const email = (acc.username||'').toLowerCase();
         currentUser = {name:acc.name||acc.username||email, email, initials:initials(acc.name||email)};
         isAdmin = email === (CONFIG.adminEmail||'').toLowerCase();
-        showApp(); await loadData(); return;
+        showApp(); await loadData(); startAutoRefresh(); return;
       }
     }
   } catch(e) { console.warn('Silent login failed', e); }

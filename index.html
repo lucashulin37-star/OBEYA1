@@ -125,7 +125,7 @@ body { font-family: system-ui, -apple-system, sans-serif; background: var(--app-
 .search-wrap svg { position: absolute; left: 8px; top: 50%; transform: translateY(-50%); width: 14px; height: 14px; color: #9e9e9b; }
 .search-wrap input { font-size: 13px; padding: 6px 10px 6px 28px; border: 1px solid #e0ddd6; border-radius: var(--radius); background: #fff; color: #1a1a18; width: 190px; }
 .board { display: flex; gap: 14px; padding: 14px 20px 40px; overflow-x: auto; align-items: flex-start; }
-.col { background: #fff; border: 1px solid #e0ddd6; border-radius: var(--radius); min-width: 240px; width: 260px; flex-shrink: 0; }
+.col { background: #fff; border: 1px solid #e0ddd6; border-radius: var(--radius); min-width: 240px; width: 260px; flex-shrink: 0; overflow: hidden; }
 .col-header { padding: 10px 12px; border-bottom: 1px solid #e0ddd6; display: flex; align-items: center; justify-content: space-between; }
 .col-label { font-size: 13px; font-weight: 600; display: flex; align-items: center; gap: 6px; }
 .col-dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
@@ -138,9 +138,10 @@ body { font-family: system-ui, -apple-system, sans-serif; background: var(--app-
 .sticky.readonly { cursor: default; opacity: .85; }
 .sticky.readonly:hover { transform: none; box-shadow: none; }
 .sticky.readonly::after { content: '🔒'; position: absolute; top: 6px; right: 7px; font-size: 11px; opacity: .4; }
-.sticky-del { position: absolute; top: 5px; right: 5px; background: none; border: none; cursor: pointer; font-size: 13px; opacity: 0; padding: 2px 4px; border-radius: 4px; color: inherit; }
-.sticky:hover .sticky-del { opacity: .5; }
-.sticky-del:hover { opacity: 1 !important; background: rgba(0,0,0,.1); }
+.sticky-actions { position: absolute; top: 4px; right: 4px; display: flex; gap: 1px; opacity: 0; transition: opacity .1s; }
+.sticky:hover .sticky-actions { opacity: .6; }
+.sticky-actions button { background: none; border: none; cursor: pointer; font-size: 12px; line-height: 1; padding: 3px 4px; border-radius: 4px; color: inherit; }
+.sticky-actions button:hover { opacity: 1 !important; background: rgba(0,0,0,.1); }
 .sticky-title { font-size: 12px; font-weight: 600; margin-bottom: 3px; padding-right: 16px; line-height: 1.4; }
 .sticky-body { font-size: 11px; line-height: 1.5; margin-bottom: 7px; opacity: .8; }
 .sticky-footer { display: flex; align-items: center; justify-content: space-between; font-size: 10px; gap: 6px; flex-wrap: wrap; }
@@ -408,7 +409,15 @@ async function loadMSAL() {
 const CFG_KEY = 'obeya_config';
 function getConfig() { try { return JSON.parse(Store.get(CFG_KEY) || 'null'); } catch { return null; } }
 function setConfigStore(cfg) { Store.set(CFG_KEY, JSON.stringify(cfg)); }
-let CONFIG = getConfig();
+// ⚙️ Configuration par défaut — appliquée automatiquement pour tout utilisateur
+// qui ouvre ce fichier (pas besoin de passer par l'écran de configuration).
+const DEFAULT_CONFIG = {
+  clientId:   '73175022-12fd-43e2-83c7-87730584a245', // Altrad Endel - OBEYA Tableau
+  tenantId:   '59b188f8-e21d-4e87-a1e4-83504fda686e',
+  adminEmail: 'Lucas.HULIN@altradendel.com',
+  fileName:   'obeya_data.json'
+};
+let CONFIG = getConfig() || DEFAULT_CONFIG;
 
 // ══════════════════════════════════════════════
 // MSAL AUTH
@@ -536,13 +545,14 @@ let state = {
     {id:'col_1', name:'Maintenance OT',  color:'#378ADD', bg:'#E6F1FB'},
     {id:'col_2', name:'Travaux neufs OE', color:'#1D9E75', bg:'#E1F5EE'},
     {id:'col_3', name:'Ingénierie',       color:'#7F77DD', bg:'#EEEDFE'},
+    {id:'col_4', name:'Soldé',            color:'#6b6b68', bg:'#ECECEA'},
   ],
   people:[
     {id:'p1', name:'Dupont Martin', color:'#185FA5', email:''},
     {id:'p2', name:'Martin Sophie', color:'#0F6E56', email:''},
     {id:'p3', name:'Leblanc Alex',  color:'#534AB7', email:''},
   ],
-  notes:[], nextId:1, nextColId:4, nextPersonId:4,
+  notes:[], nextId:1, nextColId:5, nextPersonId:4,
 };
 const PRIO_COLOR = {urgent:'#E24B4A', normal:'#EF9F27', faible:'#3B6D11'};
 let activeFilter='all', activePersonFilter='all', editNoteId=null, activeTab='cols', dragSrc=null, isSaving=false;
@@ -605,6 +615,7 @@ async function loadData() {
 
     // 👉 fichier inexistant => création auto
     if (r.status === 404) {
+      ensureSoldeColumn();
       applyTheme();
       renderBoard();
       lastSyncTime = new Date();
@@ -629,6 +640,7 @@ async function loadData() {
       }));
     }
 
+    ensureSoldeColumn();
     applyTheme();
     renderBoard();
     lastSyncTime = new Date();
@@ -758,10 +770,34 @@ function canEdit(note) {
     if (p.email && p.email.toLowerCase()===email) return true;
     if (normalizeStr(p.name)===normalizeStr(currentUser.name)) return true;
   }
+  // "De la part de" en saisie manuelle : comparaison sur le nom saisi
+  if (note.fromId==='__manual__' && note.from && normalizeStr(note.from)===normalizeStr(currentUser.name)) return true;
+  // Créateur du post-it
   if (note.authorEmail && note.authorEmail===email) return true;
   return false;
 }
 function normalizeStr(s) { return (s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim(); }
+
+// ══════════════════════════════════════════════
+// COLONNE "SOLDÉ"
+// ══════════════════════════════════════════════
+function findSoldeCol(){
+  return state.cols.find(c=>normalizeStr(c.name).includes('solde'));
+}
+function ensureSoldeColumn(){
+  if (findSoldeCol()) return;
+  const id='col_'+(state.nextColId++);
+  state.cols.push({id, name:'Soldé', color:'#6b6b68', bg:'#ECECEA'});
+}
+async function resolveNote(id,e){
+  if(e)e.stopPropagation();
+  const note=state.notes.find(n=>n.id===id);
+  if(!note||!canEdit(note)){showToast('Action non autorisée');return;}
+  const sc=findSoldeCol();
+  if(!sc){showToast('Aucune colonne "Soldé" trouvée');return;}
+  if(note.col===sc.id){showToast('Déjà soldé');return;}
+  note.col=sc.id; renderBoard(); await autoSave(); showToast('Post-it soldé ✓');
+}
 
 // ══════════════════════════════════════════════
 // THÈME
@@ -813,9 +849,11 @@ function renderBoard() {
       return true;
     });
     const el=document.createElement('div'); el.className='col';
-    el.innerHTML=`<div class="col-header"><div class="col-label"><span class="col-dot" style="background:${col.color}"></span>${esc(col.name)}<span class="col-count">${colNotes.length}</span></div></div><div class="col-body" id="colbody-${col.id}"></div>`;
+    el.style.cssText=`border-top:3px solid ${col.color}`;
+    el.innerHTML=`<div class="col-header" style="background:${colBg};color:${colText};border-bottom-color:${colBorder}"><div class="col-label"><span class="col-dot" style="background:${col.color}"></span>${esc(col.name)}<span class="col-count" style="background:${colBorder};color:${colText}">${colNotes.length}</span></div></div><div class="col-body" id="colbody-${col.id}"></div>`;
     board.appendChild(el);
     const body=document.getElementById('colbody-'+col.id);
+    const isSoldeCol = normalizeStr(col.name).includes('solde');
     if(colNotes.length===0){body.innerHTML='<div class="empty">Aucun post-it</div>';}
     else colNotes.forEach(n=>{
       const ed=canEdit(n);
@@ -827,7 +865,8 @@ function renderBoard() {
       s.style.cssText=`background:${noteBg};border-color:${noteBorder};color:${noteText}`;
       s.draggable=ed; s.dataset.id=n.id;
       const assigneeHtml=person?`<span class="avatar" style="background:${lighten(person.color)};color:${darken(person.color,60)}">${initials(person.name)}</span><span style="font-size:10px;font-weight:500">${esc(person.name)}</span>`:`<span style="opacity:.5">Non assigné</span>`;
-      s.innerHTML=`${ed?`<button class="sticky-del" onclick="deleteNote(${n.id},event)" title="Supprimer">✕</button>`:''}<div class="sticky-title">${esc(n.title)}</div>${n.body?`<div class="sticky-body">${esc(n.body)}</div>`:''}<div class="sticky-footer"><div style="display:flex;align-items:center;gap:5px">${assigneeHtml}</div><span style="opacity:.55">${n.date||''}</span></div><div style="margin-top:5px;display:flex;align-items:center;gap:5px"><span class="prio-dot" style="background:${PRIO_COLOR[n.prio]}"></span><span class="sticky-tag" style="background:${noteBorder};color:${noteText}">${n.prio.charAt(0).toUpperCase()+n.prio.slice(1)}</span>${n.from?`<span style="font-size:10px;opacity:.6">de ${esc(n.from)}</span>`:''}</div>`;
+      const actionsHtml = ed ? `<div class="sticky-actions">${isSoldeCol?'':`<button onclick="resolveNote(${n.id},event)" title="Marquer comme soldé">✅</button>`}<button onclick="deleteNote(${n.id},event)" title="Supprimer">✕</button></div>` : '';
+      s.innerHTML=`${actionsHtml}<div class="sticky-title">${esc(n.title)}</div>${n.body?`<div class="sticky-body">${esc(n.body)}</div>`:''}<div class="sticky-footer"><div style="display:flex;align-items:center;gap:5px">${assigneeHtml}</div><span style="opacity:.55">${n.date||''}</span></div><div style="margin-top:5px;display:flex;align-items:center;gap:5px"><span class="prio-dot" style="background:${PRIO_COLOR[n.prio]}"></span><span class="sticky-tag" style="background:${noteBorder};color:${noteText}">${n.prio.charAt(0).toUpperCase()+n.prio.slice(1)}</span>${n.from?`<span style="font-size:10px;opacity:.6">de ${esc(n.from)}</span>`:''}</div>`;
       if(ed){s.addEventListener('click',()=>openNoteModal(col.id,n)); s.addEventListener('dragstart',e=>{dragSrc=n.id;e.dataTransfer.effectAllowed='move';});}
       else s.addEventListener('click',()=>openNoteReadonly(n));
       body.appendChild(s);
@@ -871,8 +910,10 @@ function openNoteModal(colId,note){
   const colOpts=state.cols.map(c=>`<option value="${c.id}" ${(note?note.col:defCol)===c.id?'selected':''}>${esc(c.name)}</option>`).join('');
   const personOpts=`<option value="">— Non assigné —</option>`+state.people.map(p=>`<option value="${p.id}" ${note&&note.assigneeId===p.id?'selected':''}>${esc(p.name)}</option>`).join('');
   const fromOpts=`<option value="">— Sélectionner —</option>`+state.people.map(p=>`<option value="${p.id}" ${note&&note.fromId===p.id?'selected':''}>${esc(p.name)}</option>`).join('')+`<option value="__manual__" ${note&&note.fromId==='__manual__'?'selected':''}>Saisie manuelle…</option>`;
+  const soldeCol=findSoldeCol();
+  const showSolderBtn = !!(note && soldeCol && note.col!==soldeCol.id);
   const ov=document.createElement('div'); ov.className='overlay'; ov.id='note-overlay';
-  ov.innerHTML=`<div class="modal" onclick="event.stopPropagation()"><h3>${note?'Modifier le post-it':'Nouveau post-it'}</h3><div class="field"><label>Colonne</label><select id="f-col">${colOpts}</select></div><div class="field"><label>Titre *</label><input id="f-title" value="${note?esc(note.title):''}"></div><div class="field"><label>Description</label><textarea id="f-body">${note?esc(note.body||''):''}</textarea></div><div class="field"><label>Assigné à</label><select id="f-assignee">${personOpts}</select></div><div class="field"><label>De la part de</label><select id="f-from-sel" onchange="toggleManualFrom()">${fromOpts}</select><input type="text" id="f-from-manual" placeholder="Votre nom…" value="${note&&note.fromId==='__manual__'?esc(note.from||''):''}" style="margin-top:6px;display:${note&&note.fromId==='__manual__'?'block':'none'}"></div><div class="field"><label>Priorité</label><select id="f-prio"><option value="urgent" ${note&&note.prio==='urgent'?'selected':''}>🔴 Urgent</option><option value="normal" ${(!note||note.prio==='normal')?'selected':''}>🟡 Normal</option><option value="faible" ${note&&note.prio==='faible'?'selected':''}>🟢 Faible</option></select></div><div class="modal-btns"><button class="btn" onclick="closeNoteModal()">Annuler</button>${note?`<button class="btn btn-danger" onclick="deleteNote(${note.id},event);closeNoteModal()">Supprimer</button>`:''}<button class="btn btn-primary" onclick="saveNote('${dateStr}')">${note?'Enregistrer':'Ajouter'}</button></div></div>`;
+  ov.innerHTML=`<div class="modal" onclick="event.stopPropagation()"><h3>${note?'Modifier le post-it':'Nouveau post-it'}</h3><div class="field"><label>Colonne</label><select id="f-col">${colOpts}</select></div><div class="field"><label>Titre *</label><input id="f-title" value="${note?esc(note.title):''}"></div><div class="field"><label>Description</label><textarea id="f-body">${note?esc(note.body||''):''}</textarea></div><div class="field"><label>Assigné à</label><select id="f-assignee">${personOpts}</select></div><div class="field"><label>De la part de</label><select id="f-from-sel" onchange="toggleManualFrom()">${fromOpts}</select><input type="text" id="f-from-manual" placeholder="Votre nom…" value="${note&&note.fromId==='__manual__'?esc(note.from||''):''}" style="margin-top:6px;display:${note&&note.fromId==='__manual__'?'block':'none'}"></div><div class="field"><label>Priorité</label><select id="f-prio"><option value="urgent" ${note&&note.prio==='urgent'?'selected':''}>🔴 Urgent</option><option value="normal" ${(!note||note.prio==='normal')?'selected':''}>🟡 Normal</option><option value="faible" ${note&&note.prio==='faible'?'selected':''}>🟢 Faible</option></select></div><div class="modal-btns"><button class="btn" onclick="closeNoteModal()">Annuler</button>${note?`<button class="btn btn-danger" onclick="deleteNote(${note.id},event);closeNoteModal()">Supprimer</button>`:''}${showSolderBtn?`<button class="btn" onclick="resolveNote(${note.id},event);closeNoteModal()">✅ Solder</button>`:''}<button class="btn btn-primary" onclick="saveNote('${dateStr}')">${note?'Enregistrer':'Ajouter'}</button></div></div>`;
   ov.addEventListener('click',closeNoteModal); document.body.appendChild(ov);
   setTimeout(()=>document.getElementById('f-title')?.focus(),50);
 }
@@ -921,7 +962,7 @@ function openSettings(){if(!isAdmin){showToast('Réservé à l\'admin');return;}
 function closeSettings(){document.getElementById('side-panel').classList.remove('open');}
 function switchTab(tab){activeTab=tab; document.querySelectorAll('.side-tab').forEach(t=>t.classList.toggle('active',t.dataset.tab===tab)); document.getElementById('tab-cols').style.display=tab==='cols'?'block':'none'; document.getElementById('tab-people').style.display=tab==='people'?'block':'none'; document.getElementById('tab-theme').style.display=tab==='theme'?'block':'none';}
 async function saveSettings(){previewTheme();applyTheme();renderBoard();await autoSave();closeSettings();showToast('Paramètres sauvegardés ✓');}
-function resetAll(){if(!isAdmin)return; if(!confirm('Réinitialiser ?'))return; state.cols=[{id:'col_1',name:'Maintenance OT',color:'#378ADD',bg:'#E6F1FB'},{id:'col_2',name:'Travaux neufs OE',color:'#1D9E75',bg:'#E1F5EE'},{id:'col_3',name:'Ingénierie',color:'#7F77DD',bg:'#EEEDFE'}]; state.title='Tableau OBEYA';state.bg='#f5f5f3';state.headerBg='#ffffff';state.btnColor='#185FA5';state.radius=8; renderColsList();renderPeopleList();loadThemeForm();applyTheme();renderBoard();autoSave();showToast('Réinitialisé');}
+function resetAll(){if(!isAdmin)return; if(!confirm('Réinitialiser ?'))return; state.cols=[{id:'col_1',name:'Maintenance OT',color:'#378ADD',bg:'#E6F1FB'},{id:'col_2',name:'Travaux neufs OE',color:'#1D9E75',bg:'#E1F5EE'},{id:'col_3',name:'Ingénierie',color:'#7F77DD',bg:'#EEEDFE'},{id:'col_4',name:'Soldé',color:'#6b6b68',bg:'#ECECEA'}]; state.nextColId=5; state.title='Tableau OBEYA';state.bg='#f5f5f3';state.headerBg='#ffffff';state.btnColor='#185FA5';state.radius=8; renderColsList();renderPeopleList();loadThemeForm();applyTheme();renderBoard();autoSave();showToast('Réinitialisé');}
 
 function renderColsList(){
   const el=document.getElementById('cols-list'); el.innerHTML='';

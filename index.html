@@ -154,40 +154,6 @@ body { font-family: system-ui, -apple-system, sans-serif; background: var(--app-
 /* ── Color picker inline dans les listes ── */
 .color-swatch { width:22px;height:22px;border-radius:50%;cursor:pointer;border:2px solid rgba(0,0,0,.15);flex-shrink:0;position:relative; }
 .color-swatch input[type=color] { position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%; }
-
-/* ── Actions (sous-tâches) dans les post-its ── */
-.sticky-actions-list { margin-top:7px;border-top:1px solid rgba(0,0,0,.08);padding-top:6px; }
-.sticky-action-item { display:flex;align-items:center;gap:5px;margin-bottom:3px;font-size:10px;line-height:1.3; }
-.sticky-action-item input[type=checkbox] { width:12px;height:12px;cursor:pointer;flex-shrink:0;accent-color:#185FA5; }
-.sticky-action-item span { flex:1;word-break:break-word; }
-.sticky-action-item span.done { text-decoration:line-through;opacity:.5; }
-.sticky-progress { display:flex;align-items:center;gap:5px;margin-top:5px; }
-.sticky-progress-bar { flex:1;height:4px;background:rgba(0,0,0,.12);border-radius:2px;overflow:hidden; }
-.sticky-progress-fill { height:100%;background:#185FA5;border-radius:2px;transition:width .2s; }
-.sticky-progress-label { font-size:9px;font-weight:600;opacity:.7;white-space:nowrap; }
-
-/* ── Pièces jointes ── */
-.sticky-attachments { margin-top:6px;border-top:1px solid rgba(0,0,0,.08);padding-top:5px;display:flex;flex-wrap:wrap;gap:4px; }
-.attach-chip { display:inline-flex;align-items:center;gap:3px;font-size:9px;font-weight:500;padding:2px 7px;border-radius:20px;background:rgba(0,0,0,.08);cursor:pointer;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap; }
-.attach-chip:hover { background:rgba(0,0,0,.15); }
-
-/* ── Sections dans la modale ── */
-.modal-section { margin-top:16px;padding-top:14px;border-top:1px solid #e0ddd6; }
-.modal-section-title { font-size:11px;font-weight:700;color:#6b6b68;text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px; }
-.action-row { display:flex;align-items:center;gap:6px;margin-bottom:6px;padding:6px 8px;background:#f9f8f6;border:1px solid #e0ddd6;border-radius:6px; }
-.action-row input[type=checkbox] { width:14px;height:14px;flex-shrink:0;cursor:pointer;accent-color:#185FA5; }
-.action-row input[type=text] { flex:1;font-size:12px;padding:3px 6px;border:1px solid #e0ddd6;border-radius:4px;background:#fff; }
-.action-row .del-action { background:none;border:none;color:#9e9e9b;cursor:pointer;font-size:13px;padding:2px 4px;border-radius:3px;line-height:1;flex-shrink:0; }
-.action-row .del-action:hover { color:#993C1D;background:#FAECE7; }
-.add-action-row { display:flex;gap:6px;margin-top:6px; }
-.add-action-row input { flex:1;font-size:12px;padding:6px 9px;border:1px solid #e0ddd6;border-radius:6px; }
-
-.attach-list { display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px; }
-.attach-item { display:flex;align-items:center;gap:4px;font-size:11px;padding:4px 9px;border:1px solid #e0ddd6;border-radius:20px;background:#f9f8f6; }
-.attach-item .del-attach { background:none;border:none;color:#9e9e9b;cursor:pointer;font-size:11px;padding:0 2px;line-height:1; }
-.attach-item .del-attach:hover { color:#993C1D; }
-.attach-drop-zone { border:2px dashed #e0ddd6;border-radius:8px;padding:12px;text-align:center;font-size:12px;color:#9e9e9b;cursor:pointer;transition:all .15s; }
-.attach-drop-zone:hover,.attach-drop-zone.drag-over { border-color:#85B7EB;background:#E6F1FB;color:#0C447C; }
   </style>
 </head>
 <body>
@@ -582,8 +548,6 @@ async function sendNotification(note,isNew){
       <tr><td style="padding:5px 0;color:#6b6b68">Priorité</td><td style="padding:5px 0">${note.prio||'normal'}</td></tr>
       <tr><td style="padding:5px 0;color:#6b6b68">Date</td><td style="padding:5px 0">${note.date||'—'}</td></tr>
     </table>
-    ${(note.actions&&note.actions.length>0)?`<div style="margin-top:16px"><div style="font-size:12px;font-weight:600;color:#444441;margin-bottom:8px">✅ Actions (${note.actions.filter(a=>a.done).length}/${note.actions.length})</div><div style="background:#f5f5f3;border-radius:6px;height:6px;overflow:hidden;margin-bottom:10px"><div style="height:100%;background:#185FA5;border-radius:6px;width:${Math.round((note.actions.filter(a=>a.done).length/note.actions.length)*100)}%"></div></div><table style="width:100%;font-size:12px">${note.actions.map(a=>`<tr><td style="padding:2px 6px;width:20px">${a.done?'✅':'⬜'}</td><td style="padding:2px 6px;${a.done?'text-decoration:line-through;color:#9e9e9b':''}">${esc(a.text)}</td></tr>`).join('')}</table></div>`:''}
-    ${(note.attachments&&note.attachments.length>0)?`<div style="margin-top:14px;font-size:12px;color:#6b6b68">📎 ${note.attachments.length} pièce(s) jointe(s) : ${note.attachments.map(a=>a.name).join(', ')}</div>`:''}
     <p style="font-size:11px;color:#9e9e9b;margin:18px 0 0">Envoyé automatiquement par le Tableau OBEYA</p>
   </div>
 </div>`;
@@ -741,21 +705,7 @@ function renderBoard(){
     let actionsHtml='';
     if(ed&&!inSolde)actionsHtml=`<div class="sticky-actions"><button onclick="resolveNote(${n.id},event)" title="Marquer comme soldé">✅</button><button onclick="deleteNote(${n.id},event)" title="Supprimer">✕</button></div>`;
     else if(ed&&inSolde&&isAdmin)actionsHtml=`<div class="sticky-actions"><button onclick="unsolveNote(${n.id},event)" title="Remettre en cours">↩️</button><button onclick="deleteNote(${n.id},event)" title="Supprimer">✕</button></div>`;
-    // Actions checklist HTML
-    let actionsListHtml='';
-    if(n.actions&&n.actions.length>0){
-      const done=n.actions.filter(a=>a.done).length;
-      const pct=Math.round((done/n.actions.length)*100);
-      const items=n.actions.map((a,ai)=>`<div class="sticky-action-item"><input type="checkbox" ${a.done?'checked':''} onclick="event.stopPropagation();toggleActionInline(${n.id},${ai},this.checked)"><span class="${a.done?'done':''}">${esc(a.text)}</span></div>`).join('');
-      actionsListHtml=`<div class="sticky-actions-list">${items}<div class="sticky-progress"><div class="sticky-progress-bar"><div class="sticky-progress-fill" style="width:${pct}%"></div></div><span class="sticky-progress-label">${done}/${n.actions.length}</span></div></div>`;
-    }
-    // Attachments HTML
-    let attachHtml='';
-    if(n.attachments&&n.attachments.length>0){
-      const chips=n.attachments.map((att,ai)=>`<span class="attach-chip" onclick="event.stopPropagation();downloadAttachment(${n.id},${ai})" title="${esc(att.name)}">📎 ${esc(att.name.length>16?att.name.slice(0,14)+'…':att.name)}</span>`).join('');
-      attachHtml=`<div class="sticky-attachments">${chips}</div>`;
-    }
-    s.innerHTML=`${actionsHtml}<div class="sticky-title">${esc(n.title)}</div>${n.body?`<div class="sticky-body">${esc(n.body)}</div>`:''}<div class="sticky-footer"><div style="display:flex;align-items:center;gap:5px">${assigneeHtml}</div><span style="opacity:.55">${n.date||''}</span></div><div style="margin-top:5px;display:flex;align-items:center;gap:5px;flex-wrap:wrap"><span class="prio-dot" style="background:${PRIO_COLOR[n.prio]}"></span><span class="sticky-tag" style="background:${noteBorder};color:${noteText}">${(n.prio||'').charAt(0).toUpperCase()+(n.prio||'normal').slice(1)}</span>${n.from?`<span style="font-size:10px;opacity:.6">de ${esc(n.from)}</span>`:''}</div>${dueBadgeHtml(n)}${actionsListHtml}${attachHtml}`;
+    s.innerHTML=`${actionsHtml}<div class="sticky-title">${esc(n.title)}</div>${n.body?`<div class="sticky-body">${esc(n.body)}</div>`:''}<div class="sticky-footer"><div style="display:flex;align-items:center;gap:5px">${assigneeHtml}</div><span style="opacity:.55">${n.date||''}</span></div><div style="margin-top:5px;display:flex;align-items:center;gap:5px;flex-wrap:wrap"><span class="prio-dot" style="background:${PRIO_COLOR[n.prio]}"></span><span class="sticky-tag" style="background:${noteBorder};color:${noteText}">${(n.prio||'').charAt(0).toUpperCase()+(n.prio||'normal').slice(1)}</span>${n.from?`<span style="font-size:10px;opacity:.6">de ${esc(n.from)}</span>`:''}</div>${dueBadgeHtml(n)}`;
     if(ed&&!inSolde){
       s.addEventListener('click',()=>openNoteModal(n.col,n));
       s.addEventListener('dragstart',e=>{dragSrc=n.id;e.dataTransfer.effectAllowed='move';});
@@ -828,21 +778,7 @@ function renderPersonFilter(){
 function openNoteReadonly(note){
   const col=state.cols.find(c=>c.id===note.col),person=state.people.find(p=>p.id===note.assigneeId),from=state.people.find(p=>p.id===note.fromId);
   const ov=document.createElement('div');ov.className='overlay';ov.id='note-overlay';
-  // Actions readonly
-  let actionsReadHtml='';
-  if(note.actions&&note.actions.length>0){
-    const done=note.actions.filter(a=>a.done).length;
-    const pct=Math.round((done/note.actions.length)*100);
-    const items=note.actions.map(a=>`<div class="action-row"><input type="checkbox" disabled ${a.done?'checked':''}><input type="text" disabled value="${esc(a.text)}" style="background:#f9f8f6"></div>`).join('');
-    actionsReadHtml=`<div class="modal-section"><div class="modal-section-title">✅ Actions (${done}/${note.actions.length} — ${pct}%)</div>${items}<div class="sticky-progress" style="margin-top:6px"><div class="sticky-progress-bar"><div class="sticky-progress-fill" style="width:${pct}%;background:#185FA5"></div></div><span class="sticky-progress-label">${pct}%</span></div></div>`;
-  }
-  // Attachments readonly
-  let attachReadHtml='';
-  if(note.attachments&&note.attachments.length>0){
-    const chips=note.attachments.map((att,ai)=>`<div class="attach-item">📎 <span>${esc(att.name)}</span><button class="del-attach" onclick="downloadAttachment(${note.id},${ai})">⬇</button></div>`).join('');
-    attachReadHtml=`<div class="modal-section"><div class="modal-section-title">📎 Pièces jointes</div><div class="attach-list">${chips}</div></div>`;
-  }
-  ov.innerHTML=`<div class="modal modal-wide" onclick="event.stopPropagation()"><h3>📌 ${esc(note.title)}</h3><div class="readonly-notice">🔒 Vous n'êtes pas autorisé à modifier ce post-it.</div><div class="field"><label>Colonne</label><input disabled value="${col?esc(col.name):'—'}"></div><div class="field"><label>Description</label><textarea disabled style="resize:none">${esc(note.body||'—')}</textarea></div><div class="field"><label>Assigné à</label><input disabled value="${person?esc(person.name):'Non assigné'}"></div><div class="field"><label>De la part de</label><input disabled value="${from?esc(from.name):esc(note.from||'—')}"></div><div class="field"><label>Priorité</label><input disabled value="${note.prio||'normal'}"></div>${note.dueDate?`<div class="field"><label>📅 Échéance</label><input disabled value="${note.dueDate.split('-').reverse().join('/')}"></div>`:''}${dueBadgeHtml(note)}${actionsReadHtml}${attachReadHtml}<div class="modal-btns"><button class="btn btn-primary" onclick="closeNoteModal()">Fermer</button></div></div>`;
+  ov.innerHTML=`<div class="modal" onclick="event.stopPropagation()"><h3>📌 ${esc(note.title)}</h3><div class="readonly-notice">🔒 Vous n'êtes pas autorisé à modifier ce post-it.</div><div class="field"><label>Colonne</label><input disabled value="${col?esc(col.name):'—'}"></div><div class="field"><label>Description</label><textarea disabled style="resize:none">${esc(note.body||'—')}</textarea></div><div class="field"><label>Assigné à</label><input disabled value="${person?esc(person.name):'Non assigné'}"></div><div class="field"><label>De la part de</label><input disabled value="${from?esc(from.name):esc(note.from||'—')}"></div><div class="field"><label>Priorité</label><input disabled value="${note.prio||'normal'}"></div>${note.dueDate?`<div class="field"><label>📅 Échéance</label><input disabled value="${note.dueDate.split('-').reverse().join('/')}"></div>`:''}${dueBadgeHtml(note)}<div class="modal-btns"><button class="btn btn-primary" onclick="closeNoteModal()">Fermer</button></div></div>`;
   ov.addEventListener('click',closeNoteModal);document.body.appendChild(ov);
 }
 
@@ -855,12 +791,8 @@ function openNoteModal(colId,note){
   const personOpts=`<option value="">— Non assigné —</option>`+state.people.map(p=>`<option value="${p.id}" ${note&&note.assigneeId===p.id?'selected':''}>${esc(p.name)}</option>`).join('');
   const fromOpts=`<option value="">— Sélectionner —</option>`+state.people.map(p=>`<option value="${p.id}" ${note&&note.fromId===p.id?'selected':''}>${esc(p.name)}</option>`).join('')+`<option value="__manual__" ${note&&note.fromId==='__manual__'?'selected':''}>Saisie manuelle…</option>`;
   const showSolderBtn=!!(note&&!note.solde);
-  // Init temp actions & attachments from note
-  window._editActions = note&&note.actions ? JSON.parse(JSON.stringify(note.actions)) : [];
-  window._editAttachments = note&&note.attachments ? JSON.parse(JSON.stringify(note.attachments)) : [];
-
   const ov=document.createElement('div');ov.className='overlay';ov.id='note-overlay';
-  ov.innerHTML=`<div class="modal modal-wide" onclick="event.stopPropagation()">
+  ov.innerHTML=`<div class="modal" onclick="event.stopPropagation()">
     <h3>${note?'Modifier le post-it':'Nouveau post-it'}</h3>
     <div class="field"><label>Colonne</label><select id="f-col">${colOpts}</select></div>
     <div class="field"><label>Titre *</label><input id="f-title" value="${note?esc(note.title):''}"></div>
@@ -892,27 +824,6 @@ function openNoteModal(colId,note){
         </select>
       </div>
     </div>
-
-    <!-- ── Section Actions ── -->
-    <div class="modal-section">
-      <div class="modal-section-title">✅ Actions / Sous-tâches</div>
-      <div id="f-actions-list"></div>
-      <div class="add-action-row">
-        <input type="text" id="f-new-action" placeholder="Nouvelle action…" onkeydown="if(event.key==='Enter'){event.preventDefault();addModalAction();}">
-        <button class="btn" onclick="addModalAction()">+ Ajouter</button>
-      </div>
-    </div>
-
-    <!-- ── Section Pièces jointes ── -->
-    <div class="modal-section">
-      <div class="modal-section-title">📎 Pièces jointes</div>
-      <div id="f-attach-list" class="attach-list"></div>
-      <div class="attach-drop-zone" id="f-attach-zone" onclick="document.getElementById('f-attach-input').click()" ondragover="event.preventDefault();this.classList.add('drag-over')" ondragleave="this.classList.remove('drag-over')" ondrop="handleAttachDrop(event)">
-        📂 Cliquer ou déposer des fichiers ici<br><span style="font-size:10px;opacity:.7">(max 2 Mo par fichier)</span>
-      </div>
-      <input type="file" id="f-attach-input" multiple style="display:none" onchange="handleAttachSelect(this)">
-    </div>
-
     <div class="modal-btns">
       <button class="btn" onclick="closeNoteModal()">Annuler</button>
       ${note?`<button class="btn btn-danger" onclick="deleteNote(${note.id},event);closeNoteModal()">Supprimer</button>`:''}
@@ -921,104 +832,10 @@ function openNoteModal(colId,note){
     </div>
   </div>`;
   ov.addEventListener('click',closeNoteModal);document.body.appendChild(ov);
-  renderModalActions();
-  renderModalAttachments();
   setTimeout(()=>document.getElementById('f-title')?.focus(),50);
 }
 function toggleManualFrom(){const s=document.getElementById('f-from-sel').value;document.getElementById('f-from-manual').style.display=s==='__manual__'?'block':'none';}
-function closeNoteModal(){document.getElementById('note-overlay')?.remove();editNoteId=null;window._editActions=[];window._editAttachments=[];}
-
-// ══════════════════════════════════════════════
-// ACTIONS (sous-tâches)
-// ══════════════════════════════════════════════
-function renderModalActions(){
-  const el=document.getElementById('f-actions-list');if(!el)return;
-  if(!window._editActions.length){el.innerHTML='<div style="font-size:11px;color:#9e9e9b;margin-bottom:6px;font-style:italic">Aucune action. Ajoutez des sous-tâches ci-dessous.</div>';return;}
-  el.innerHTML=window._editActions.map((a,i)=>`
-    <div class="action-row">
-      <input type="checkbox" ${a.done?'checked':''} onchange="window._editActions[${i}].done=this.checked;renderModalActions()">
-      <input type="text" value="${esc(a.text)}" oninput="window._editActions[${i}].text=this.value" placeholder="Description de l'action…">
-      <button class="del-action" onclick="window._editActions.splice(${i},1);renderModalActions()">✕</button>
-    </div>`).join('');
-}
-function addModalAction(){
-  const inp=document.getElementById('f-new-action');
-  const text=(inp?.value||'').trim();
-  if(!text)return;
-  window._editActions.push({text,done:false});
-  inp.value='';
-  renderModalActions();
-}
-async function toggleActionInline(noteId,actionIdx,checked){
-  const note=state.notes.find(n=>n.id===noteId);
-  if(!note||!note.actions||!note.actions[actionIdx])return;
-  note.actions[actionIdx].done=checked;
-  renderBoard();
-  await autoSave();
-  // Notification si toutes faites
-  if(note.actions.every(a=>a.done)){
-    showToast('🎉 Toutes les actions sont complètes !');
-    await sendProgressNotification(note);
-  }
-}
-async function sendProgressNotification(note){
-  try{
-    const token=await getToken();if(!token)return;
-    const recipients=[];
-    const assignee=state.people.find(p=>p.id===note.assigneeId);
-    const from=note.fromId&&note.fromId!=='__manual__'?state.people.find(p=>p.id===note.fromId):null;
-    if(assignee?.email)recipients.push(assignee.email);
-    if(from?.email&&from.email!==assignee?.email)recipients.push(from.email);
-    if(note.authorEmail&&!recipients.includes(note.authorEmail))recipients.push(note.authorEmail);
-    if(!recipients.length)return;
-    const done=note.actions.filter(a=>a.done).length;
-    const total=note.actions.length;
-    const pct=Math.round((done/total)*100);
-    const actionsList=note.actions.map(a=>`<tr><td style="padding:3px 8px">${a.done?'✅':'⬜'}</td><td style="padding:3px 8px;${a.done?'text-decoration:line-through;color:#9e9e9b':''}">${esc(a.text)}</td></tr>`).join('');
-    const subject=`[OBEYA] ${pct===100?'✅ Toutes les actions complètes':'📊 Avancement des actions'} : ${note.title}`;
-    const body=`<div style="font-family:system-ui,sans-serif;max-width:520px;margin:0 auto;padding:24px;background:#f5f5f3;border-radius:10px"><div style="background:#fff;border-radius:8px;padding:20px 24px;border:1px solid #e0ddd6"><h2 style="font-size:16px;margin:0 0 4px;color:#1a1a18">${pct===100?'🎉 Toutes les actions sont complètes !':'📊 Mise à jour de l'avancement'}</h2><p style="font-size:13px;color:#6b6b68;margin:0 0 18px">Tâche : <strong>${note.title}</strong> — ${done}/${total} actions (${pct}%)</p><div style="background:#f5f5f3;border-radius:6px;height:8px;overflow:hidden;margin-bottom:16px"><div style="height:100%;background:#185FA5;border-radius:6px;width:${pct}%"></div></div><table style="width:100%;font-size:13px;border-collapse:collapse">${actionsList}</table><p style="font-size:11px;color:#9e9e9b;margin:18px 0 0">Envoyé automatiquement par le Tableau OBEYA</p></div></div>`;
-    await fetch('https://graph.microsoft.com/v1.0/me/sendMail',{method:'POST',headers:{Authorization:'Bearer '+token,'Content-Type':'application/json'},body:JSON.stringify({message:{subject,body:{contentType:'HTML',content:body},toRecipients:recipients.map(r=>({emailAddress:{address:r}}))}})});
-    console.log('[OBEYA] Notification avancement envoyée');
-  }catch(e){console.warn('[OBEYA] Notification avancement non envoyée:',e.message);}
-}
-
-// ══════════════════════════════════════════════
-// PIÈCES JOINTES
-// ══════════════════════════════════════════════
-function renderModalAttachments(){
-  const el=document.getElementById('f-attach-list');if(!el)return;
-  if(!window._editAttachments.length){el.innerHTML='';return;}
-  el.innerHTML=window._editAttachments.map((att,i)=>`
-    <div class="attach-item">
-      📎 <span>${esc(att.name)}</span>
-      <button class="del-attach" title="Supprimer" onclick="window._editAttachments.splice(${i},1);renderModalAttachments()">✕</button>
-    </div>`).join('');
-}
-function handleAttachSelect(input){
-  Array.from(input.files).forEach(file=>processAttachFile(file));
-  input.value='';
-}
-function handleAttachDrop(e){
-  e.preventDefault();
-  document.getElementById('f-attach-zone')?.classList.remove('drag-over');
-  Array.from(e.dataTransfer.files).forEach(file=>processAttachFile(file));
-}
-function processAttachFile(file){
-  const MAX=2*1024*1024;
-  if(file.size>MAX){showToast(`⚠️ ${file.name} dépasse 2 Mo`);return;}
-  const reader=new FileReader();
-  reader.onload=e=>{
-    window._editAttachments.push({name:file.name,type:file.type,size:file.size,data:e.target.result});
-    renderModalAttachments();
-  };
-  reader.readAsDataURL(file);
-}
-function downloadAttachment(noteId,attIdx){
-  const note=state.notes.find(n=>n.id===noteId);
-  if(!note||!note.attachments||!note.attachments[attIdx])return;
-  const att=note.attachments[attIdx];
-  const a=document.createElement('a');a.href=att.data;a.download=att.name;a.click();
-}
+function closeNoteModal(){document.getElementById('note-overlay')?.remove();editNoteId=null;}
 
 async function saveNote(dateStr){
   const title=document.getElementById('f-title').value.trim();
@@ -1031,22 +848,20 @@ async function saveNote(dateStr){
   if(fromSel==='__manual__'){from=document.getElementById('f-from-manual').value.trim();}
   else if(fromSel){const p=state.people.find(x=>x.id===fromSel);from=p?p.name:'';}
   const ap=state.people.find(p=>p.id===assigneeId);
-  const actions=window._editActions||[];
-  const attachments=window._editAttachments||[];
   let isNew=!editNoteId;
   let prevAssigneeId=null,prevFromId=null;
   if(editNoteId){
     const n=state.notes.find(x=>x.id===editNoteId);
-    if(n){prevAssigneeId=n.assigneeId;prevFromId=n.fromId;Object.assign(n,{col,title,body,assigneeId,assignee:ap?ap.name:'',from,fromId,prio,dueDate,reminderDays,actions,attachments});}
+    if(n){prevAssigneeId=n.assigneeId;prevFromId=n.fromId;Object.assign(n,{col,title,body,assigneeId,assignee:ap?ap.name:'',from,fromId,prio,dueDate,reminderDays});}
   }else{
-    state.notes.push({id:state.nextId++,col,title,body,assigneeId,assignee:ap?ap.name:'',from,fromId,prio,dueDate,reminderDays,actions,attachments,date:dateStr,solde:false,authorEmail:currentUser?.email,authorName:currentUser?.name});
+    state.notes.push({id:state.nextId++,col,title,body,assigneeId,assignee:ap?ap.name:'',from,fromId,prio,dueDate,reminderDays,date:dateStr,solde:false,authorEmail:currentUser?.email,authorName:currentUser?.name});
   }
   closeNoteModal();renderBoard();await autoSave();
-  const targetNote=state.notes.find(n=>n.id===(editNoteId||state.nextId-1))||state.notes[state.notes.length-1];
+  const targetNote=editNoteId?state.notes.find(n=>n.id===editNoteId):state.notes[state.notes.length-1];
   const assigneeChanged=!isNew&&assigneeId!==prevAssigneeId;
   const fromChanged=!isNew&&fromId!==prevFromId;
   if(isNew||(assigneeChanged||fromChanged)){
-    await sendNotification(targetNote||{title,body,col,assigneeId,assignee:ap?ap.name:'',from,fromId,prio,dueDate,date:dateStr,actions,attachments},isNew);
+    await sendNotification(targetNote||{title,body,col,assigneeId,assignee:ap?ap.name:'',from,fromId,prio,dueDate,date:dateStr},isNew);
   }
 }
 

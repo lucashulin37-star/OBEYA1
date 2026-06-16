@@ -98,6 +98,11 @@ body { font-family: system-ui, -apple-system, sans-serif; background: var(--app-
 .sticky-title { font-size:12px;font-weight:600;margin-bottom:3px;padding-right:50px;line-height:1.4; }
 .sticky-body { font-size:11px;line-height:1.5;margin-bottom:7px;opacity:.8; }
 .sticky-footer { display:flex;align-items:center;justify-content:space-between;font-size:10px;gap:6px;flex-wrap:wrap; }
+.due-badge { display:inline-flex;align-items:center;gap:3px;font-size:10px;font-weight:600;padding:2px 7px;border-radius:20px;margin-top:4px; }
+.due-badge.ok    { background:#E1F5EE;color:#0F6E56; }
+.due-badge.soon  { background:#FFF3CD;color:#7A5500; }
+.due-badge.late  { background:#FAECE7;color:#993C1D; animation:blink-late 1.5s ease-in-out infinite; }
+@keyframes blink-late { 0%,100%{opacity:1}50%{opacity:.6} }
 .prio-dot { width:6px;height:6px;border-radius:50%;display:inline-block;margin-right:3px;flex-shrink:0; }
 .sticky-tag { font-size:9px;font-weight:600;padding:1px 6px;border-radius:20px;margin-top:5px;display:inline-block; }
 .empty { text-align:center;font-size:12px;color:#9e9e9b;padding:28px 0;font-style:italic; }
@@ -365,7 +370,7 @@ async function msalLogin(){
     const name=acc.name||acc.username||email;
     currentUser={name,email,initials:initials(name)};
     isAdmin=email===(CONFIG.adminEmail||'').toLowerCase();
-    showApp(); await loadData(); startAutoRefresh();
+    showApp(); await loadData(); startAutoRefresh(); startReminderCheck();
   }catch(err){
     console.error('Login error',err);
     loginErr.textContent='❌ '+(err.message||'Erreur de connexion.');
@@ -553,8 +558,62 @@ async function sendNotification(note,isNew){
 }
 
 // ══════════════════════════════════════════════
-// SOLDER
+// UTILITAIRES DATES / RAPPELS
 // ══════════════════════════════════════════════
+function dueBadgeHtml(note){
+  if(!note.dueDate) return '';
+  const today=new Date(); today.setHours(0,0,0,0);
+  const due=new Date(note.dueDate); due.setHours(0,0,0,0);
+  const diff=Math.round((due-today)/(1000*60*60*24));
+  const label=diff<0?`En retard de ${Math.abs(diff)}j`:diff===0?'Aujourd\'hui':`Dans ${diff}j`;
+  const cls=diff<0?'late':diff<=3?'soon':'ok';
+  const icon=diff<0?'⚠️':diff<=3?'⏰':'📅';
+  return `<span class="due-badge ${cls}">${icon} ${label} (${note.dueDate.split('-').reverse().join('/')})</span>`;
+}
+
+let reminderCheckTimer=null;
+function startReminderCheck(){
+  if(reminderCheckTimer)clearInterval(reminderCheckTimer);
+  checkReminders();
+  reminderCheckTimer=setInterval(checkReminders,60*60*1000); // toutes les heures
+}
+async function checkReminders(){
+  if(!currentUser)return;
+  const today=new Date(); today.setHours(0,0,0,0);
+  for(const n of state.notes){
+    if(n.solde||!n.dueDate||!n.reminderDays)continue;
+    const due=new Date(n.dueDate); due.setHours(0,0,0,0);
+    const diff=Math.round((due-today)/(1000*60*60*24));
+    const remKey=`reminder_${n.id}_${n.dueDate}_${n.reminderDays}`;
+    if(diff===parseInt(n.reminderDays) && !Store.get(remKey)){
+      Store.set(remKey,'1');
+      await sendReminderEmail(n,diff);
+    }
+    // Rappel le jour J
+    const remKeyJ=`reminder_${n.id}_${n.dueDate}_0`;
+    if(diff===0 && !Store.get(remKeyJ)){
+      Store.set(remKeyJ,'1');
+      await sendReminderEmail(n,0);
+    }
+  }
+}
+async function sendReminderEmail(note,daysLeft){
+  try{
+    const token=await getToken(); if(!token)return;
+    const recipients=[];
+    const assignee=state.people.find(p=>p.id===note.assigneeId);
+    const from=note.fromId&&note.fromId!=='__manual__'?state.people.find(p=>p.id===note.fromId):null;
+    if(assignee?.email)recipients.push(assignee.email);
+    if(from?.email&&from.email!==assignee?.email)recipients.push(from.email);
+    if(note.authorEmail&&!recipients.includes(note.authorEmail))recipients.push(note.authorEmail);
+    if(!recipients.length)return;
+    const col=state.cols.find(c=>c.id===note.col);
+    const subject=daysLeft===0?`[OBEYA] ⚠️ Tâche à échéance aujourd'hui : ${note.title}`:`[OBEYA] ⏰ Rappel dans ${daysLeft}j : ${note.title}`;
+    const body=`<div style="font-family:system-ui,sans-serif;max-width:520px;margin:0 auto;padding:24px;background:#f5f5f3;border-radius:10px"><div style="background:#fff;border-radius:8px;padding:20px 24px;border:1px solid #e0ddd6"><h2 style="font-size:16px;margin:0 0 4px;color:#993C1D">${daysLeft===0?'⚠️ Tâche à échéance aujourd\'hui':'⏰ Rappel d\'échéance'}</h2><p style="font-size:13px;color:#6b6b68;margin:0 0 18px">${daysLeft===0?'Cette tâche est due aujourd\'hui.':`Cette tâche arrive à échéance dans <strong>${daysLeft} jour(s)</strong>.`}</p><table style="width:100%;font-size:13px;border-collapse:collapse"><tr><td style="padding:5px 0;color:#6b6b68;width:120px">Titre</td><td style="padding:5px 0;font-weight:600">${note.title}</td></tr><tr><td style="padding:5px 0;color:#6b6b68">Colonne</td><td>${col?col.name:'—'}</td></tr><tr><td style="padding:5px 0;color:#6b6b68">Assigné à</td><td>${assignee?assignee.name:'Non assigné'}</td></tr><tr><td style="padding:5px 0;color:#6b6b68">Échéance</td><td style="font-weight:600;color:#993C1D">${note.dueDate.split('-').reverse().join('/')}</td></tr>${note.body?`<tr><td style="padding:5px 0;color:#6b6b68">Description</td><td>${note.body}</td></tr>`:''}</table><p style="font-size:11px;color:#9e9e9b;margin:18px 0 0">Envoyé automatiquement par le Tableau OBEYA</p></div></div>`;
+    await fetch(GRAPH+'/me/sendMail',{method:'POST',headers:{Authorization:'Bearer '+token,'Content-Type':'application/json'},body:JSON.stringify({message:{subject,body:{contentType:'HTML',content:body},toRecipients:recipients.map(r=>({emailAddress:{address:r}}))}})});
+    console.log('[OBEYA] Rappel envoyé à',recipients);
+  }catch(e){console.warn('[OBEYA] Rappel non envoyé:',e.message);}
+}
 async function resolveNote(id,e){
   if(e)e.stopPropagation();
   const note=state.notes.find(n=>n.id===id);
@@ -646,7 +705,7 @@ function renderBoard(){
     let actionsHtml='';
     if(ed&&!inSolde)actionsHtml=`<div class="sticky-actions"><button onclick="resolveNote(${n.id},event)" title="Marquer comme soldé">✅</button><button onclick="deleteNote(${n.id},event)" title="Supprimer">✕</button></div>`;
     else if(ed&&inSolde&&isAdmin)actionsHtml=`<div class="sticky-actions"><button onclick="unsolveNote(${n.id},event)" title="Remettre en cours">↩️</button><button onclick="deleteNote(${n.id},event)" title="Supprimer">✕</button></div>`;
-    s.innerHTML=`${actionsHtml}<div class="sticky-title">${esc(n.title)}</div>${n.body?`<div class="sticky-body">${esc(n.body)}</div>`:''}<div class="sticky-footer"><div style="display:flex;align-items:center;gap:5px">${assigneeHtml}</div><span style="opacity:.55">${n.date||''}</span></div><div style="margin-top:5px;display:flex;align-items:center;gap:5px"><span class="prio-dot" style="background:${PRIO_COLOR[n.prio]}"></span><span class="sticky-tag" style="background:${noteBorder};color:${noteText}">${(n.prio||'').charAt(0).toUpperCase()+(n.prio||'normal').slice(1)}</span>${n.from?`<span style="font-size:10px;opacity:.6">de ${esc(n.from)}</span>`:''}</div>`;
+    s.innerHTML=`${actionsHtml}<div class="sticky-title">${esc(n.title)}</div>${n.body?`<div class="sticky-body">${esc(n.body)}</div>`:''}<div class="sticky-footer"><div style="display:flex;align-items:center;gap:5px">${assigneeHtml}</div><span style="opacity:.55">${n.date||''}</span></div><div style="margin-top:5px;display:flex;align-items:center;gap:5px;flex-wrap:wrap"><span class="prio-dot" style="background:${PRIO_COLOR[n.prio]}"></span><span class="sticky-tag" style="background:${noteBorder};color:${noteText}">${(n.prio||'').charAt(0).toUpperCase()+(n.prio||'normal').slice(1)}</span>${n.from?`<span style="font-size:10px;opacity:.6">de ${esc(n.from)}</span>`:''}</div>${dueBadgeHtml(n)}`;
     if(ed&&!inSolde){
       s.addEventListener('click',()=>openNoteModal(n.col,n));
       s.addEventListener('dragstart',e=>{dragSrc=n.id;e.dataTransfer.effectAllowed='move';});
@@ -719,7 +778,7 @@ function renderPersonFilter(){
 function openNoteReadonly(note){
   const col=state.cols.find(c=>c.id===note.col),person=state.people.find(p=>p.id===note.assigneeId),from=state.people.find(p=>p.id===note.fromId);
   const ov=document.createElement('div');ov.className='overlay';ov.id='note-overlay';
-  ov.innerHTML=`<div class="modal" onclick="event.stopPropagation()"><h3>📌 ${esc(note.title)}</h3><div class="readonly-notice">🔒 Vous n'êtes pas autorisé à modifier ce post-it.</div><div class="field"><label>Colonne</label><input disabled value="${col?esc(col.name):'—'}"></div><div class="field"><label>Description</label><textarea disabled style="resize:none">${esc(note.body||'—')}</textarea></div><div class="field"><label>Assigné à</label><input disabled value="${person?esc(person.name):'Non assigné'}"></div><div class="field"><label>De la part de</label><input disabled value="${from?esc(from.name):esc(note.from||'—')}"></div><div class="field"><label>Priorité</label><input disabled value="${note.prio||'normal'}"></div><div class="modal-btns"><button class="btn btn-primary" onclick="closeNoteModal()">Fermer</button></div></div>`;
+  ov.innerHTML=`<div class="modal" onclick="event.stopPropagation()"><h3>📌 ${esc(note.title)}</h3><div class="readonly-notice">🔒 Vous n'êtes pas autorisé à modifier ce post-it.</div><div class="field"><label>Colonne</label><input disabled value="${col?esc(col.name):'—'}"></div><div class="field"><label>Description</label><textarea disabled style="resize:none">${esc(note.body||'—')}</textarea></div><div class="field"><label>Assigné à</label><input disabled value="${person?esc(person.name):'Non assigné'}"></div><div class="field"><label>De la part de</label><input disabled value="${from?esc(from.name):esc(note.from||'—')}"></div><div class="field"><label>Priorité</label><input disabled value="${note.prio||'normal'}"></div>${note.dueDate?`<div class="field"><label>📅 Échéance</label><input disabled value="${note.dueDate.split('-').reverse().join('/')}"></div>`:''}${dueBadgeHtml(note)}<div class="modal-btns"><button class="btn btn-primary" onclick="closeNoteModal()">Fermer</button></div></div>`;
   ov.addEventListener('click',closeNoteModal);document.body.appendChild(ov);
 }
 
@@ -750,6 +809,21 @@ function openNoteModal(colId,note){
         <option value="faible" ${note&&note.prio==='faible'?'selected':''}>🟢 Faible</option>
       </select>
     </div>
+    <div style="display:flex;gap:10px">
+      <div class="field" style="flex:1"><label>📅 Date d'échéance</label>
+        <input type="date" id="f-due" value="${note&&note.dueDate?note.dueDate:''}" min="${new Date().toISOString().split('T')[0]}">
+      </div>
+      <div class="field" style="flex:1"><label>⏰ Rappel (jours avant)</label>
+        <select id="f-reminder">
+          <option value="" ${!note||!note.reminderDays?'selected':''}>Aucun rappel</option>
+          <option value="1"  ${note&&note.reminderDays==='1' ?'selected':''}>La veille (1j)</option>
+          <option value="2"  ${note&&note.reminderDays==='2' ?'selected':''}>2 jours avant</option>
+          <option value="3"  ${note&&note.reminderDays==='3' ?'selected':''}>3 jours avant</option>
+          <option value="7"  ${note&&note.reminderDays==='7' ?'selected':''}>1 semaine avant</option>
+          <option value="14" ${note&&note.reminderDays==='14'?'selected':''}>2 semaines avant</option>
+        </select>
+      </div>
+    </div>
     <div class="modal-btns">
       <button class="btn" onclick="closeNoteModal()">Annuler</button>
       ${note?`<button class="btn btn-danger" onclick="deleteNote(${note.id},event);closeNoteModal()">Supprimer</button>`:''}
@@ -768,6 +842,8 @@ async function saveNote(dateStr){
   if(!title){document.getElementById('f-title').focus();showToast('Le titre est obligatoire');return;}
   const col=document.getElementById('f-col').value,body=document.getElementById('f-body').value.trim();
   const assigneeId=document.getElementById('f-assignee').value||null,prio=document.getElementById('f-prio').value;
+  const dueDate=document.getElementById('f-due').value||null;
+  const reminderDays=document.getElementById('f-reminder').value||null;
   const fromSel=document.getElementById('f-from-sel').value;let from='',fromId=fromSel||null;
   if(fromSel==='__manual__'){from=document.getElementById('f-from-manual').value.trim();}
   else if(fromSel){const p=state.people.find(x=>x.id===fromSel);from=p?p.name:'';}
@@ -776,19 +852,16 @@ async function saveNote(dateStr){
   let prevAssigneeId=null,prevFromId=null;
   if(editNoteId){
     const n=state.notes.find(x=>x.id===editNoteId);
-    if(n){prevAssigneeId=n.assigneeId;prevFromId=n.fromId;Object.assign(n,{col,title,body,assigneeId,assignee:ap?ap.name:'',from,fromId,prio});}
+    if(n){prevAssigneeId=n.assigneeId;prevFromId=n.fromId;Object.assign(n,{col,title,body,assigneeId,assignee:ap?ap.name:'',from,fromId,prio,dueDate,reminderDays});}
   }else{
-    state.notes.push({id:state.nextId++,col,title,body,assigneeId,assignee:ap?ap.name:'',from,fromId,prio,date:dateStr,solde:false,authorEmail:currentUser?.email,authorName:currentUser?.name});
+    state.notes.push({id:state.nextId++,col,title,body,assigneeId,assignee:ap?ap.name:'',from,fromId,prio,dueDate,reminderDays,date:dateStr,solde:false,authorEmail:currentUser?.email,authorName:currentUser?.name});
   }
   closeNoteModal();renderBoard();await autoSave();
-  // Notification email si assignation ou expéditeur renseigné
-  const note=state.notes.find(n=>n.title===title&&n.col===col&&(n.assigneeId===assigneeId||n.fromId===fromId));
-  const noteToNotify=state.notes[state.notes.length-1];
   const targetNote=editNoteId?state.notes.find(n=>n.id===editNoteId):state.notes[state.notes.length-1];
   const assigneeChanged=!isNew&&assigneeId!==prevAssigneeId;
   const fromChanged=!isNew&&fromId!==prevFromId;
   if(isNew||(assigneeChanged||fromChanged)){
-    await sendNotification(targetNote||{title,body,col,assigneeId,assignee:ap?ap.name:'',from,fromId,prio,date:dateStr},isNew);
+    await sendNotification(targetNote||{title,body,col,assigneeId,assignee:ap?ap.name:'',from,fromId,prio,dueDate,date:dateStr},isNew);
   }
 }
 
@@ -900,7 +973,7 @@ window.addEventListener('load', async()=>{
         const email=(acc.username||'').toLowerCase();
         currentUser={name:acc.name||acc.username||email,email,initials:initials(acc.name||email)};
         isAdmin=email===(CONFIG.adminEmail||'').toLowerCase();
-        showApp();await loadData();startAutoRefresh();return;
+        showApp();await loadData();startAutoRefresh();startReminderCheck();return;
       }
     }
   }catch(e){console.warn('Silent login failed',e);}

@@ -1041,24 +1041,22 @@ async function toggleAction(noteId,actionId,checked){
   note.lastModifiedByName=currentUser?.name;
   renderBoard();
   await autoSave();
-  // Notification si toutes les actions sont faites
+  // Calcul du pourcentage réel selon le nombre d'actions
   const total=note.actions.length,done=note.actions.filter(a=>a.done).length;
-  if(done===total&&total>0) await sendProgressNotification(note,100);
-  else if(done>0) await sendProgressNotification(note,Math.round(done/total*100));
+  if(done>0) await sendProgressNotification(note,Math.round(done/total*100));
 }
 
 async function sendProgressNotification(note,pct){
-  const milestones=[25,50,75,100];
-  if(!milestones.includes(pct))return;
   // Ne déclencher que depuis le compte du dernier modificateur
   const senderEmail=(note.lastModifiedByEmail||note.authorEmail||'').toLowerCase().trim();
   if(!senderEmail||currentUser?.email?.toLowerCase().trim()!==senderEmail)return;
-  // Throttle stocké dans la note (SharePoint) — partagé entre toutes les sessions
+  // Les jalons sont dynamiques : 1 action cochée sur N = Math.round(done/total*100)
+  // Ex : 3 actions → jalons à 33%, 67%, 100% | 4 actions → 25%, 50%, 75%, 100%
+  // On envoie à chaque nouveau pourcentage, avec throttle 5min par valeur de % (clé = pct arrondi)
   if(!note.progressNotifSent)note.progressNotifSent=[];
   const throttleKey=`${pct}pct`;
   const lastSentEntry=note.progressNotifSent.find(e=>e.key===throttleKey);
   if(lastSentEntry&&Date.now()-lastSentEntry.ts<5*60*1000)return;
-  // Met à jour ou ajoute l'entrée
   if(lastSentEntry)lastSentEntry.ts=Date.now();
   else note.progressNotifSent.push({key:throttleKey,ts:Date.now()});
   await autoSave();

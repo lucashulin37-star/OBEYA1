@@ -631,22 +631,31 @@ function startReminderCheck(){
 async function checkReminders(){
   if(!currentUser)return;
   const today=new Date(); today.setHours(0,0,0,0);
+  let needsSave=false;
   for(const n of state.notes){
     if(n.solde||!n.dueDate||!n.reminderDays)continue;
+    // Ne déclencher que si l'utilisateur connecté est le dernier à avoir modifié cette note.
+    // Sinon le mail partirait depuis le mauvais compte Graph (/me/sendMail).
+    // Pour les anciennes notes sans lastModifiedByEmail, on utilise authorEmail en fallback.
+    const senderEmail=(n.lastModifiedByEmail||n.authorEmail||'').toLowerCase().trim();
+    if(!senderEmail||currentUser.email.toLowerCase().trim()!==senderEmail)continue;
     const due=new Date(n.dueDate); due.setHours(0,0,0,0);
     const diff=Math.round((due-today)/(1000*60*60*24));
-    const remKey=`reminder_${n.id}_${n.dueDate}_${n.reminderDays}`;
-    if(diff===parseInt(n.reminderDays) && !Store.get(remKey)){
-      Store.set(remKey,'1');
+    if(!n.remindersSent)n.remindersSent=[];
+    const keyJ=`${n.dueDate}:${n.reminderDays}`;
+    if(diff===parseInt(n.reminderDays) && !n.remindersSent.includes(keyJ)){
+      n.remindersSent.push(keyJ);
+      needsSave=true;
       await sendReminderEmail(n,diff);
     }
-    // Rappel le jour J
-    const remKeyJ=`reminder_${n.id}_${n.dueDate}_0`;
-    if(diff===0 && !Store.get(remKeyJ)){
-      Store.set(remKeyJ,'1');
+    const keyD=`${n.dueDate}:0`;
+    if(diff===0 && !n.remindersSent.includes(keyD)){
+      n.remindersSent.push(keyD);
+      needsSave=true;
       await sendReminderEmail(n,0);
     }
   }
+  if(needsSave)await autoSave();
 }
 async function sendReminderEmail(note,daysLeft){
   try{
@@ -658,13 +667,13 @@ async function sendReminderEmail(note,daysLeft){
     if(from?.email)recipients.add(from.email.toLowerCase().trim());
     if(note.authorEmail)recipients.add(note.authorEmail.toLowerCase().trim());
     const rcpt=[...recipients].filter(Boolean);
-    if(!rcpt.length)return;
+    if(!rcpt.length){console.log('[OBEYA] sendReminderEmail: aucun destinataire avec email renseigné pour',note.title);return;}
     const col=state.cols.find(c=>c.id===note.col);
     const subject=daysLeft===0?`[OBEYA] ⚠️ Tâche à échéance aujourd'hui : ${note.title}`:`[OBEYA] ⏰ Rappel dans ${daysLeft}j : ${note.title}`;
-    const body=`<div style="font-family:system-ui,sans-serif;max-width:520px;margin:0 auto;padding:24px;background:#f5f5f3;border-radius:10px"><div style="background:#fff;border-radius:8px;padding:20px 24px;border:1px solid #e0ddd6"><h2 style="font-size:16px;margin:0 0 4px;color:#993C1D">${daysLeft===0?'⚠️ Tâche à échéance aujourd\'hui':'⏰ Rappel d\'échéance'}</h2><p style="font-size:13px;color:#6b6b68;margin:0 0 18px">${daysLeft===0?'Cette tâche est due aujourd\'hui.':`Cette tâche arrive à échéance dans <strong>${daysLeft} jour(s)</strong>.`}</p><table style="width:100%;font-size:13px;border-collapse:collapse"><tr><td style="padding:5px 0;color:#6b6b68;width:120px">Titre</td><td style="padding:5px 0;font-weight:600">${note.title}</td></tr><tr><td style="padding:5px 0;color:#6b6b68">Colonne</td><td>${col?col.name:'—'}</td></tr><tr><td style="padding:5px 0;color:#6b6b68">Assigné à</td><td>${assignee?assignee.name:'Non assigné'}</td></tr><tr><td style="padding:5px 0;color:#6b6b68">Échéance</td><td style="font-weight:600;color:#993C1D">${note.dueDate.split('-').reverse().join('/')}</td></tr>${note.body?`<tr><td style="padding:5px 0;color:#6b6b68">Description</td><td>${note.body}</td></tr>`:''}</table><p style="font-size:11px;color:#9e9e9b;margin:18px 0 0">Envoyé automatiquement par le Tableau OBEYA</p></div></div>`;
+    const body=`<div style="font-family:system-ui,sans-serif;max-width:520px;margin:0 auto;padding:24px;background:#f5f5f3;border-radius:10px"><div style="background:#fff;border-radius:8px;padding:20px 24px;border:1px solid #e0ddd6"><h2 style="font-size:16px;margin:0 0 4px;color:#993C1D">${daysLeft===0?'⚠️ Tâche à échéance aujourd\'hui':'⏰ Rappel d\'échéance'}</h2><p style="font-size:13px;color:#6b6b68;margin:0 0 18px">${daysLeft===0?'Cette tâche est due aujourd\'hui.':`Cette tâche arrive à échéance dans <strong>${daysLeft} jour(s)</strong>.`}</p><table style="width:100%;font-size:13px;border-collapse:collapse"><tr><td style="padding:5px 0;color:#6b6b68;width:120px">Titre</td><td style="padding:5px 0;font-weight:600">${note.title}</td></tr><tr><td style="padding:5px 0;color:#6b6b68">Colonne</td><td>${col?col.name:'—'}</td></tr><tr><td style="padding:5px 0;color:#6b6b68">Assigné à</td><td>${assignee?assignee.name:'Non assigné'}</td></tr>${from?`<tr><td style="padding:5px 0;color:#6b6b68">De la part de</td><td>${from.name}</td></tr>`:''}<tr><td style="padding:5px 0;color:#6b6b68">Créé par</td><td>${note.authorName||'—'}</td></tr><tr><td style="padding:5px 0;color:#6b6b68">Échéance</td><td style="font-weight:600;color:#993C1D">${note.dueDate.split('-').reverse().join('/')}</td></tr>${note.body?`<tr><td style="padding:5px 0;color:#6b6b68">Description</td><td>${note.body}</td></tr>`:''}</table><p style="font-size:11px;color:#9e9e9b;margin:18px 0 0">Envoyé automatiquement par le Tableau OBEYA</p></div></div>`;
     const resp=await fetch(GRAPH+'/me/sendMail',{method:'POST',headers:{Authorization:'Bearer '+token,'Content-Type':'application/json'},body:JSON.stringify({message:{subject,body:{contentType:'HTML',content:body},toRecipients:rcpt.map(r=>({emailAddress:{address:r}}))}})});
     if(!resp.ok){const txt=await resp.text();console.error('[OBEYA] sendReminderEmail HTTP',resp.status,txt);return;}
-    console.log('[OBEYA] Rappel envoyé à',rcpt);
+    console.log('[OBEYA] Rappel envoyé à',rcpt,'pour',note.title);
   }catch(e){console.warn('[OBEYA] Rappel non envoyé:',e.message);}
 }
 async function resolveNote(id,e){
@@ -673,11 +682,17 @@ async function resolveNote(id,e){
   if(!note||!canEdit(note)){showToast('Action non autorisée');return;}
   if(note.solde){showToast('Déjà soldé');return;}
   note.solde=true;
+  note.lastModifiedByEmail=currentUser?.email;
+  note.lastModifiedByName=currentUser?.name;
   renderBoard();await autoSave();showToast('Post-it soldé ✓');
   await sendSoldeNotification(note);
 }
 
 async function sendSoldeNotification(note){
+  // Le lastModifiedByEmail a déjà été mis à jour juste avant cet appel dans resolveNote.
+  // On vérifie par sécurité que c'est bien l'utilisateur connecté qui envoie.
+  const senderEmail=(note.lastModifiedByEmail||'').toLowerCase().trim();
+  if(senderEmail&&currentUser?.email?.toLowerCase().trim()!==senderEmail)return;
   try{
     const token=await getToken();if(!token)return;
     const recipients=new Set();
@@ -981,9 +996,9 @@ async function saveNote(dateStr){
   let prevAssigneeId=null,prevFromId=null;
   if(editNoteId){
     const n=state.notes.find(x=>x.id===editNoteId);
-    if(n){prevAssigneeId=n.assigneeId;prevFromId=n.fromId;Object.assign(n,{col,title,body,assigneeId,assignee:ap?ap.name:'',from,fromId,prio,dueDate,reminderDays,actions,attachments});}
+    if(n){prevAssigneeId=n.assigneeId;prevFromId=n.fromId;Object.assign(n,{col,title,body,assigneeId,assignee:ap?ap.name:'',from,fromId,prio,dueDate,reminderDays,actions,attachments,lastModifiedByEmail:currentUser?.email,lastModifiedByName:currentUser?.name});}
   }else{
-    state.notes.push({id:state.nextId++,col,title,body,assigneeId,assignee:ap?ap.name:'',from,fromId,prio,dueDate,reminderDays,date:dateStr,solde:false,authorEmail:currentUser?.email,authorName:currentUser?.name,actions,attachments});
+    state.notes.push({id:state.nextId++,col,title,body,assigneeId,assignee:ap?ap.name:'',from,fromId,prio,dueDate,reminderDays,date:dateStr,solde:false,authorEmail:currentUser?.email,authorName:currentUser?.name,lastModifiedByEmail:currentUser?.email,lastModifiedByName:currentUser?.name,actions,attachments});
   }
   // Capturer la note AVANT closeNoteModal() qui remet editNoteId=null
   const savedEditId=editNoteId;
@@ -1022,6 +1037,8 @@ async function toggleAction(noteId,actionId,checked){
   const note=state.notes.find(n=>n.id===noteId);if(!note||!note.actions)return;
   const act=note.actions.find(a=>a.id===actionId);if(!act)return;
   act.done=checked;
+  note.lastModifiedByEmail=currentUser?.email;
+  note.lastModifiedByName=currentUser?.name;
   renderBoard();
   await autoSave();
   // Notification si toutes les actions sont faites
@@ -1031,13 +1048,20 @@ async function toggleAction(noteId,actionId,checked){
 }
 
 async function sendProgressNotification(note,pct){
-  // Anti-spam : seulement aux jalons 25/50/75/100%, et au max 1 mail/5min par note
   const milestones=[25,50,75,100];
   if(!milestones.includes(pct))return;
-  const throttleKey=`progress_notif_${note.id}_${pct}`;
-  const lastSent=parseInt(Store.get(throttleKey)||'0');
-  if(Date.now()-lastSent<5*60*1000)return;
-  Store.set(throttleKey,String(Date.now()));
+  // Ne déclencher que depuis le compte du dernier modificateur
+  const senderEmail=(note.lastModifiedByEmail||note.authorEmail||'').toLowerCase().trim();
+  if(!senderEmail||currentUser?.email?.toLowerCase().trim()!==senderEmail)return;
+  // Throttle stocké dans la note (SharePoint) — partagé entre toutes les sessions
+  if(!note.progressNotifSent)note.progressNotifSent=[];
+  const throttleKey=`${pct}pct`;
+  const lastSentEntry=note.progressNotifSent.find(e=>e.key===throttleKey);
+  if(lastSentEntry&&Date.now()-lastSentEntry.ts<5*60*1000)return;
+  // Met à jour ou ajoute l'entrée
+  if(lastSentEntry)lastSentEntry.ts=Date.now();
+  else note.progressNotifSent.push({key:throttleKey,ts:Date.now()});
+  await autoSave();
   try{
     const token=await getToken();if(!token)return;
     const recipients=new Set();

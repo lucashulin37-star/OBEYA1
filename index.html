@@ -674,6 +674,30 @@ async function resolveNote(id,e){
   if(note.solde){showToast('Déjà soldé');return;}
   note.solde=true;
   renderBoard();await autoSave();showToast('Post-it soldé ✓');
+  await sendSoldeNotification(note);
+}
+
+async function sendSoldeNotification(note){
+  try{
+    const token=await getToken();if(!token)return;
+    const recipients=new Set();
+    const assignee=state.people.find(p=>p.id===note.assigneeId);
+    const from=note.fromId&&note.fromId!=='__manual__'?state.people.find(p=>p.id===note.fromId):null;
+    if(assignee?.email)recipients.add(assignee.email.toLowerCase().trim());
+    if(from?.email)recipients.add(from.email.toLowerCase().trim());
+    if(note.authorEmail)recipients.add(note.authorEmail.toLowerCase().trim());
+    const rcpt=[...recipients].filter(Boolean);
+    if(!rcpt.length)return;
+    const col=state.cols.find(c=>c.id===note.col);
+    const total=note.actions?.length||0;
+    const done=note.actions?.filter(a=>a.done).length||0;
+    const subject=`[OBEYA] ✅ Tâche soldée : ${note.title}`;
+    const actSection=total>0?`<div style="margin-top:14px;padding-top:12px;border-top:1px solid #e0ddd6"><p style="font-size:12px;font-weight:600;margin:0 0 8px">☑️ Actions (${done}/${total})</p>${note.actions.map(a=>`<div style="font-size:12px;margin-bottom:4px">${a.done?'✅':'⬜'} <span style="${a.done?'text-decoration:line-through;color:#9e9e9b':''}">${esc(a.text)}</span></div>`).join('')}</div>`:'';
+    const body=`<div style="font-family:system-ui,sans-serif;max-width:520px;margin:0 auto;padding:24px;background:#f5f5f3;border-radius:10px"><div style="background:#fff;border-radius:8px;padding:20px 24px;border:1px solid #e0ddd6"><h2 style="font-size:16px;margin:0 0 4px;color:#3B6D11">✅ Tâche soldée</h2><p style="font-size:13px;color:#6b6b68;margin:0 0 18px">Tableau OBEYA — ${state.title}</p><table style="width:100%;font-size:13px;border-collapse:collapse"><tr><td style="padding:5px 0;color:#6b6b68;width:120px">Titre</td><td style="padding:5px 0;font-weight:600">${note.title}</td></tr>${note.body?`<tr><td style="padding:5px 0;color:#6b6b68">Description</td><td style="padding:5px 0">${note.body}</td></tr>`:''}<tr><td style="padding:5px 0;color:#6b6b68">Colonne</td><td style="padding:5px 0">${col?col.name:'—'}</td></tr><tr><td style="padding:5px 0;color:#6b6b68">Assigné à</td><td style="padding:5px 0">${assignee?assignee.name:'Non assigné'}</td></tr><tr><td style="padding:5px 0;color:#6b6b68">Priorité</td><td style="padding:5px 0">${note.prio||'normal'}</td></tr>${note.dueDate?`<tr><td style="padding:5px 0;color:#6b6b68">Échéance</td><td style="padding:5px 0">${note.dueDate.split('-').reverse().join('/')}</td></tr>`:''}<tr><td style="padding:5px 0;color:#6b6b68">Soldé par</td><td style="padding:5px 0;font-weight:600">${currentUser?.name||'—'}</td></tr></table>${actSection}<p style="font-size:11px;color:#9e9e9b;margin:18px 0 0">Envoyé automatiquement par le Tableau OBEYA</p></div></div>`;
+    const resp=await fetch(GRAPH+'/me/sendMail',{method:'POST',headers:{Authorization:'Bearer '+token,'Content-Type':'application/json'},body:JSON.stringify({message:{subject,body:{contentType:'HTML',content:body},toRecipients:rcpt.map(r=>({emailAddress:{address:r}}))}})});
+    if(!resp.ok){const txt=await resp.text();console.error('[OBEYA] sendSoldeNotification HTTP',resp.status,txt);return;}
+    console.log('[OBEYA] Notification soldé envoyée à',rcpt);
+  }catch(e){console.warn('[OBEYA] sendSoldeNotification:',e.message);}
 }
 // Ressortir un post-it de "Soldé" (admin seulement)
 async function unsolveNote(id,e){
@@ -979,16 +1003,19 @@ async function saveNote(dateStr){
 // ══════════════════════════════════════════════
 let modalActions=[], modalAttachments=[];
 
+function syncModalActionsFromDom(){
+  modalActions.forEach((a,i)=>{const el=document.getElementById('f-action-'+i);if(el)a.text=el.value;});
+}
 function renderModalActions(){
   const el=document.getElementById('f-actions-list');if(!el)return;
   el.innerHTML='';
   modalActions.forEach((a,i)=>{
     const row=document.createElement('div');row.className='action-row';
-    row.innerHTML=`<input type="checkbox" ${a.done?'checked':''} onchange="modalActions[${i}].done=this.checked"><input type="text" class="action-text" id="f-action-${i}" value="${esc(a.text)}" placeholder="Décrire l'action…"><button class="del-action" onclick="modalActions.splice(${i},1);renderModalActions()">✕</button>`;
+    row.innerHTML=`<input type="checkbox" ${a.done?'checked':''} onchange="modalActions[${i}].done=this.checked"><input type="text" class="action-text" id="f-action-${i}" value="${esc(a.text)}" placeholder="Décrire l'action…"><button class="del-action" onclick="syncModalActionsFromDom();modalActions.splice(${i},1);renderModalActions()">✕</button>`;
     el.appendChild(row);
   });
 }
-function addActionRow(){modalActions.push({id:'a'+Date.now(),text:'',done:false});renderModalActions();setTimeout(()=>{const inputs=document.querySelectorAll('.action-text');if(inputs.length)inputs[inputs.length-1].focus();},30);}
+function addActionRow(){syncModalActionsFromDom();modalActions.push({id:'a'+Date.now(),text:'',done:false});renderModalActions();setTimeout(()=>{const inputs=document.querySelectorAll('.action-text');if(inputs.length)inputs[inputs.length-1].focus();},30);}
 
 // Cochage direct sur le post-it (sans ouvrir la modale)
 async function toggleAction(noteId,actionId,checked){

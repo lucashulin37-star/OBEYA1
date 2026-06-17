@@ -107,6 +107,42 @@ body { font-family: system-ui, -apple-system, sans-serif; background: var(--app-
 .sticky-tag { font-size:9px;font-weight:600;padding:1px 6px;border-radius:20px;margin-top:5px;display:inline-block; }
 .empty { text-align:center;font-size:12px;color:#9e9e9b;padding:28px 0;font-style:italic; }
 
+/* ── Actions (checklist) dans le post-it ── */
+.sticky-actions-list { margin:5px 0 4px;display:flex;flex-direction:column;gap:3px; }
+.sticky-action-item { display:flex;align-items:center;gap:5px;font-size:10px;line-height:1.4; }
+.sticky-action-item input[type=checkbox] { width:12px;height:12px;cursor:pointer;flex-shrink:0;accent-color:#185FA5; }
+.sticky-action-item.done span { text-decoration:line-through;opacity:.5; }
+.sticky-progress { height:4px;border-radius:2px;background:rgba(0,0,0,.12);margin:4px 0 2px;overflow:hidden; }
+.sticky-progress-bar { height:100%;border-radius:2px;background:#3B6D11;transition:width .3s; }
+.sticky-progress-pct { font-size:9px;opacity:.6;margin-bottom:4px; }
+
+/* ── Pièces jointes dans le post-it ── */
+.sticky-attachments { display:flex;flex-wrap:wrap;gap:3px;margin-top:4px; }
+.sticky-attach-chip { font-size:9px;padding:2px 6px;border-radius:20px;background:rgba(0,0,0,.1);display:inline-flex;align-items:center;gap:3px;cursor:pointer;max-width:110px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap; }
+.sticky-attach-chip:hover { background:rgba(0,0,0,.2); }
+
+/* ── Sections dans la modale ── */
+.modal-section { margin-top:14px;padding-top:12px;border-top:1px solid #f0eee8; }
+.modal-section-title { font-size:11px;font-weight:700;color:#9e9e9b;text-transform:uppercase;letter-spacing:.06em;margin-bottom:9px; }
+.action-row { display:flex;align-items:center;gap:6px;margin-bottom:5px; }
+.action-row input[type=checkbox] { width:15px;height:15px;cursor:pointer;flex-shrink:0;accent-color:#185FA5; }
+.action-row .action-text { flex:1;font-size:12px;padding:4px 8px;border:1px solid #e0ddd6;border-radius:5px; }
+.action-row .action-text:focus { outline:none;border-color:#85B7EB; }
+.action-row .del-action { background:none;border:none;cursor:pointer;color:#c0bdb4;font-size:13px;padding:2px 4px;border-radius:4px;line-height:1; }
+.action-row .del-action:hover { color:#993C1D;background:#FAECE7; }
+.add-action-btn { font-size:11px;color:#185FA5;background:none;border:1px dashed #85B7EB;border-radius:5px;padding:4px 10px;cursor:pointer;width:100%;margin-top:2px; }
+.add-action-btn:hover { background:#E6F1FB; }
+
+/* ── Pièces jointes dans la modale ── */
+.attach-list { display:flex;flex-direction:column;gap:4px;margin-bottom:6px; }
+.attach-item { display:flex;align-items:center;gap:6px;padding:5px 8px;background:#f9f8f6;border:1px solid #e0ddd6;border-radius:5px;font-size:11px; }
+.attach-item .attach-name { flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap; }
+.attach-item .attach-size { font-size:10px;color:#9e9e9b;flex-shrink:0; }
+.attach-item .del-attach { background:none;border:none;cursor:pointer;color:#c0bdb4;font-size:12px;padding:1px 4px;border-radius:4px; }
+.attach-item .del-attach:hover { color:#993C1D;background:#FAECE7; }
+.attach-drop-zone { border:2px dashed #e0ddd6;border-radius:6px;padding:12px;text-align:center;font-size:11px;color:#9e9e9b;cursor:pointer;transition:border-color .15s,background .15s; }
+.attach-drop-zone:hover,.attach-drop-zone.dragover { border-color:#85B7EB;background:#E6F1FB;color:#0C447C; }
+
 /* ── Badge "En cours" sur les colonnes actives ── */
 .in-progress-badge { font-size:9px;font-weight:700;background:#EF9F27;color:#fff;padding:2px 7px;border-radius:20px;letter-spacing:.04em;margin-left:4px; }
 
@@ -547,7 +583,10 @@ async function sendNotification(note,isNew){
       <tr><td style="padding:5px 0;color:#6b6b68">De la part de</td><td style="padding:5px 0">${from?from.name:(note.from||'—')}</td></tr>
       <tr><td style="padding:5px 0;color:#6b6b68">Priorité</td><td style="padding:5px 0">${note.prio||'normal'}</td></tr>
       <tr><td style="padding:5px 0;color:#6b6b68">Date</td><td style="padding:5px 0">${note.date||'—'}</td></tr>
+      ${note.dueDate?`<tr><td style="padding:5px 0;color:#6b6b68">Échéance</td><td style="padding:5px 0;font-weight:600;color:#993C1D">${note.dueDate.split('-').reverse().join('/')}</td></tr>`:''}
     </table>
+    ${(note.actions&&note.actions.length>0)?`<div style="margin-top:14px;padding-top:12px;border-top:1px solid #e0ddd6"><p style="font-size:12px;font-weight:600;margin:0 0 8px">☑️ Actions (${note.actions.filter(a=>a.done).length}/${note.actions.length})</p>${note.actions.map(a=>`<div style="font-size:12px;margin-bottom:4px">${a.done?'✅':'⬜'} <span style="${a.done?'text-decoration:line-through;color:#9e9e9b':''}">${esc(a.text)}</span></div>`).join('')}</div>`:''}
+    ${(note.attachments&&note.attachments.length>0)?`<div style="margin-top:10px;padding-top:10px;border-top:1px solid #e0ddd6"><p style="font-size:12px;font-weight:600;margin:0 0 6px">📎 Pièces jointes (${note.attachments.length})</p>${note.attachments.map(a=>`<div style="font-size:12px;margin-bottom:3px">• ${esc(a.name)} (${formatSize(a.size||0)})</div>`).join('')}</div>`:''}
     <p style="font-size:11px;color:#9e9e9b;margin:18px 0 0">Envoyé automatiquement par le Tableau OBEYA</p>
   </div>
 </div>`;
@@ -702,10 +741,27 @@ function renderBoard(){
     const assigneeHtml=person
       ?`<span class="avatar" style="background:${lighten(person.color)};color:${darken(person.color,60)}">${initials(person.name)}</span><span style="font-size:10px;font-weight:500">${esc(person.name)}</span>`
       :`<span style="opacity:.5">Non assigné</span>`;
-    let actionsHtml='';
-    if(ed&&!inSolde)actionsHtml=`<div class="sticky-actions"><button onclick="resolveNote(${n.id},event)" title="Marquer comme soldé">✅</button><button onclick="deleteNote(${n.id},event)" title="Supprimer">✕</button></div>`;
-    else if(ed&&inSolde&&isAdmin)actionsHtml=`<div class="sticky-actions"><button onclick="unsolveNote(${n.id},event)" title="Remettre en cours">↩️</button><button onclick="deleteNote(${n.id},event)" title="Supprimer">✕</button></div>`;
-    s.innerHTML=`${actionsHtml}<div class="sticky-title">${esc(n.title)}</div>${n.body?`<div class="sticky-body">${esc(n.body)}</div>`:''}<div class="sticky-footer"><div style="display:flex;align-items:center;gap:5px">${assigneeHtml}</div><span style="opacity:.55">${n.date||''}</span></div><div style="margin-top:5px;display:flex;align-items:center;gap:5px;flex-wrap:wrap"><span class="prio-dot" style="background:${PRIO_COLOR[n.prio]}"></span><span class="sticky-tag" style="background:${noteBorder};color:${noteText}">${(n.prio||'').charAt(0).toUpperCase()+(n.prio||'normal').slice(1)}</span>${n.from?`<span style="font-size:10px;opacity:.6">de ${esc(n.from)}</span>`:''}</div>${dueBadgeHtml(n)}`;
+    let quickBtnsHtml='';
+    if(ed&&!inSolde)quickBtnsHtml=`<div class="sticky-actions"><button onclick="resolveNote(${n.id},event)" title="Marquer comme soldé">✅</button><button onclick="deleteNote(${n.id},event)" title="Supprimer">✕</button></div>`;
+    else if(ed&&inSolde&&isAdmin)quickBtnsHtml=`<div class="sticky-actions"><button onclick="unsolveNote(${n.id},event)" title="Remettre en cours">↩️</button><button onclick="deleteNote(${n.id},event)" title="Supprimer">✕</button></div>`;
+    // ── Actions checklist ──
+    const acts=n.actions||[];
+    let actionsListHtml='';
+    if(acts.length>0){
+      const done=acts.filter(a=>a.done).length;
+      const pct=Math.round(done/acts.length*100);
+      const barColor=pct===100?'#3B6D11':pct>=50?'#EF9F27':'#185FA5';
+      const itemsHtml=acts.slice(0,4).map(a=>`<div class="sticky-action-item${a.done?' done':''}"><input type="checkbox" ${a.done?'checked':''} onclick="event.stopPropagation();toggleAction(${n.id},'${a.id}',this.checked)"><span>${esc(a.text)}</span></div>`).join('');
+      const more=acts.length>4?`<div style="font-size:9px;opacity:.5">+${acts.length-4} action(s)…</div>`:'';
+      actionsListHtml=`<div class="sticky-actions-list">${itemsHtml}${more}</div><div class="sticky-progress"><div class="sticky-progress-bar" style="width:${pct}%;background:${barColor}"></div></div><div class="sticky-progress-pct">${done}/${acts.length} action(s) — ${pct}%</div>`;
+    }
+    // ── Pièces jointes ──
+    const atts=n.attachments||[];
+    let attachHtml='';
+    if(atts.length>0){
+      attachHtml=`<div class="sticky-attachments">`+atts.map(a=>`<span class="sticky-attach-chip" onclick="event.stopPropagation();downloadAttachment('${n.id}','${a.id}')" title="${esc(a.name)}">📎 ${esc(a.name.length>14?a.name.slice(0,12)+'…':a.name)}</span>`).join('')+`</div>`;
+    }
+    s.innerHTML=`${quickBtnsHtml}<div class="sticky-title">${esc(n.title)}</div>${n.body?`<div class="sticky-body">${esc(n.body)}</div>`:''}`+actionsListHtml+attachHtml+`<div class="sticky-footer"><div style="display:flex;align-items:center;gap:5px">${assigneeHtml}</div><span style="opacity:.55">${n.date||''}</span></div><div style="margin-top:5px;display:flex;align-items:center;gap:5px;flex-wrap:wrap"><span class="prio-dot" style="background:${PRIO_COLOR[n.prio]}"></span><span class="sticky-tag" style="background:${noteBorder};color:${noteText}">${(n.prio||'').charAt(0).toUpperCase()+(n.prio||'normal').slice(1)}</span>${n.from?`<span style="font-size:10px;opacity:.6">de ${esc(n.from)}</span>`:''}</div>${dueBadgeHtml(n)}`;
     if(ed&&!inSolde){
       s.addEventListener('click',()=>openNoteModal(n.col,n));
       s.addEventListener('dragstart',e=>{dragSrc=n.id;e.dataTransfer.effectAllowed='move';});
@@ -777,8 +833,21 @@ function renderPersonFilter(){
 // ══════════════════════════════════════════════
 function openNoteReadonly(note){
   const col=state.cols.find(c=>c.id===note.col),person=state.people.find(p=>p.id===note.assigneeId),from=state.people.find(p=>p.id===note.fromId);
+  // Build actions HTML
+  const acts=note.actions||[];
+  let actHtml='';
+  if(acts.length>0){
+    const done=acts.filter(a=>a.done).length,pct=Math.round(done/acts.length*100);
+    actHtml=`<div class="field"><label>☑️ Actions (${done}/${acts.length} — ${pct}%)</label><div style="height:5px;border-radius:3px;background:#e0ddd6;margin-bottom:8px"><div style="height:5px;border-radius:3px;width:${pct}%;background:${pct===100?'#3B6D11':pct>=50?'#EF9F27':'#185FA5'}"></div></div>`+acts.map(a=>`<div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;font-size:12px"><span>${a.done?'✅':'⬜'}</span><span style="${a.done?'text-decoration:line-through;opacity:.5':''}">${esc(a.text)}</span></div>`).join('')+'</div>';
+  }
+  // Build attachments HTML
+  const atts=note.attachments||[];
+  let attHtml='';
+  if(atts.length>0){
+    attHtml=`<div class="field"><label>📎 Pièces jointes</label>`+atts.map(a=>`<div class="attach-item" style="cursor:pointer" onclick="downloadAttachment('${note.id}','${a.id}')"><span>📎</span><span class="attach-name">${esc(a.name)}</span><span class="attach-size">${formatSize(a.size||0)}</span><span style="font-size:10px;color:#185FA5">⬇️ Télécharger</span></div>`).join('')+'</div>';
+  }
   const ov=document.createElement('div');ov.className='overlay';ov.id='note-overlay';
-  ov.innerHTML=`<div class="modal" onclick="event.stopPropagation()"><h3>📌 ${esc(note.title)}</h3><div class="readonly-notice">🔒 Vous n'êtes pas autorisé à modifier ce post-it.</div><div class="field"><label>Colonne</label><input disabled value="${col?esc(col.name):'—'}"></div><div class="field"><label>Description</label><textarea disabled style="resize:none">${esc(note.body||'—')}</textarea></div><div class="field"><label>Assigné à</label><input disabled value="${person?esc(person.name):'Non assigné'}"></div><div class="field"><label>De la part de</label><input disabled value="${from?esc(from.name):esc(note.from||'—')}"></div><div class="field"><label>Priorité</label><input disabled value="${note.prio||'normal'}"></div>${note.dueDate?`<div class="field"><label>📅 Échéance</label><input disabled value="${note.dueDate.split('-').reverse().join('/')}"></div>`:''}${dueBadgeHtml(note)}<div class="modal-btns"><button class="btn btn-primary" onclick="closeNoteModal()">Fermer</button></div></div>`;
+  ov.innerHTML=`<div class="modal" onclick="event.stopPropagation()"><h3>📌 ${esc(note.title)}</h3><div class="readonly-notice">🔒 Vous n'êtes pas autorisé à modifier ce post-it.</div><div class="field"><label>Colonne</label><input disabled value="${col?esc(col.name):'—'}"></div><div class="field"><label>Description</label><textarea disabled style="resize:none">${esc(note.body||'—')}</textarea></div><div class="field"><label>Assigné à</label><input disabled value="${person?esc(person.name):'Non assigné'}"></div><div class="field"><label>De la part de</label><input disabled value="${from?esc(from.name):esc(note.from||'—')}"></div><div class="field"><label>Priorité</label><input disabled value="${note.prio||'normal'}"></div>${note.dueDate?`<div class="field"><label>📅 Échéance</label><input disabled value="${note.dueDate.split('-').reverse().join('/')}"></div>`:''}${dueBadgeHtml(note)}${actHtml}${attHtml}<div class="modal-btns"><button class="btn btn-primary" onclick="closeNoteModal()">Fermer</button></div></div>`;
   ov.addEventListener('click',closeNoteModal);document.body.appendChild(ov);
 }
 
@@ -824,6 +893,19 @@ function openNoteModal(colId,note){
         </select>
       </div>
     </div>
+    <div class="modal-section">
+      <div class="modal-section-title">☑️ Actions / checklist</div>
+      <div id="f-actions-list"></div>
+      <button class="add-action-btn" onclick="addActionRow()">+ Ajouter une action</button>
+    </div>
+    <div class="modal-section">
+      <div class="modal-section-title">📎 Pièces jointes</div>
+      <div id="f-attach-list" class="attach-list"></div>
+      <div class="attach-drop-zone" id="f-attach-zone" onclick="document.getElementById('f-attach-input').click()" ondragover="event.preventDefault();this.classList.add('dragover')" ondragleave="this.classList.remove('dragover')" ondrop="handleAttachDrop(event)">
+        Cliquez ou déposez des fichiers ici (max 4 Mo par fichier)
+      </div>
+      <input type="file" id="f-attach-input" multiple style="display:none" onchange="handleAttachFiles(this.files)">
+    </div>
     <div class="modal-btns">
       <button class="btn" onclick="closeNoteModal()">Annuler</button>
       ${note?`<button class="btn btn-danger" onclick="deleteNote(${note.id},event);closeNoteModal()">Supprimer</button>`:''}
@@ -833,6 +915,12 @@ function openNoteModal(colId,note){
   </div>`;
   ov.addEventListener('click',closeNoteModal);document.body.appendChild(ov);
   setTimeout(()=>document.getElementById('f-title')?.focus(),50);
+  // Init actions
+  modalActions=(note&&note.actions)?JSON.parse(JSON.stringify(note.actions)):[];
+  renderModalActions();
+  // Init attachments
+  modalAttachments=(note&&note.attachments)?JSON.parse(JSON.stringify(note.attachments)):[];
+  renderModalAttachments();
 }
 function toggleManualFrom(){const s=document.getElementById('f-from-sel').value;document.getElementById('f-from-manual').style.display=s==='__manual__'?'block':'none';}
 function closeNoteModal(){document.getElementById('note-overlay')?.remove();editNoteId=null;}
@@ -848,13 +936,16 @@ async function saveNote(dateStr){
   if(fromSel==='__manual__'){from=document.getElementById('f-from-manual').value.trim();}
   else if(fromSel){const p=state.people.find(x=>x.id===fromSel);from=p?p.name:'';}
   const ap=state.people.find(p=>p.id===assigneeId);
+  // Collect actions from modal
+  const actions=modalActions.map((a,i)=>({...a,text:document.getElementById('f-action-'+i)?.value||a.text})).filter(a=>a.text.trim());
+  const attachments=modalAttachments;
   let isNew=!editNoteId;
   let prevAssigneeId=null,prevFromId=null;
   if(editNoteId){
     const n=state.notes.find(x=>x.id===editNoteId);
-    if(n){prevAssigneeId=n.assigneeId;prevFromId=n.fromId;Object.assign(n,{col,title,body,assigneeId,assignee:ap?ap.name:'',from,fromId,prio,dueDate,reminderDays});}
+    if(n){prevAssigneeId=n.assigneeId;prevFromId=n.fromId;Object.assign(n,{col,title,body,assigneeId,assignee:ap?ap.name:'',from,fromId,prio,dueDate,reminderDays,actions,attachments});}
   }else{
-    state.notes.push({id:state.nextId++,col,title,body,assigneeId,assignee:ap?ap.name:'',from,fromId,prio,dueDate,reminderDays,date:dateStr,solde:false,authorEmail:currentUser?.email,authorName:currentUser?.name});
+    state.notes.push({id:state.nextId++,col,title,body,assigneeId,assignee:ap?ap.name:'',from,fromId,prio,dueDate,reminderDays,date:dateStr,solde:false,authorEmail:currentUser?.email,authorName:currentUser?.name,actions,attachments});
   }
   closeNoteModal();renderBoard();await autoSave();
   const targetNote=editNoteId?state.notes.find(n=>n.id===editNoteId):state.notes[state.notes.length-1];
@@ -863,6 +954,94 @@ async function saveNote(dateStr){
   if(isNew||(assigneeChanged||fromChanged)){
     await sendNotification(targetNote||{title,body,col,assigneeId,assignee:ap?ap.name:'',from,fromId,prio,dueDate,date:dateStr},isNew);
   }
+}
+
+// ══════════════════════════════════════════════
+// ACTIONS (checklist) — état temporaire dans la modale
+// ══════════════════════════════════════════════
+let modalActions=[], modalAttachments=[];
+
+function renderModalActions(){
+  const el=document.getElementById('f-actions-list');if(!el)return;
+  el.innerHTML='';
+  modalActions.forEach((a,i)=>{
+    const row=document.createElement('div');row.className='action-row';
+    row.innerHTML=`<input type="checkbox" ${a.done?'checked':''} onchange="modalActions[${i}].done=this.checked"><input type="text" class="action-text" id="f-action-${i}" value="${esc(a.text)}" placeholder="Décrire l'action…"><button class="del-action" onclick="modalActions.splice(${i},1);renderModalActions()">✕</button>`;
+    el.appendChild(row);
+  });
+}
+function addActionRow(){modalActions.push({id:'a'+Date.now(),text:'',done:false});renderModalActions();setTimeout(()=>{const inputs=document.querySelectorAll('.action-text');if(inputs.length)inputs[inputs.length-1].focus();},30);}
+
+// Cochage direct sur le post-it (sans ouvrir la modale)
+async function toggleAction(noteId,actionId,checked){
+  const note=state.notes.find(n=>n.id===noteId);if(!note||!note.actions)return;
+  const act=note.actions.find(a=>a.id===actionId);if(!act)return;
+  act.done=checked;
+  renderBoard();
+  await autoSave();
+  // Notification si toutes les actions sont faites
+  const total=note.actions.length,done=note.actions.filter(a=>a.done).length;
+  if(done===total&&total>0) await sendProgressNotification(note,100);
+  else if(done>0) await sendProgressNotification(note,Math.round(done/total*100));
+}
+
+async function sendProgressNotification(note,pct){
+  try{
+    const token=await getToken();if(!token)return;
+    const recipients=[];
+    const assignee=state.people.find(p=>p.id===note.assigneeId);
+    const from=note.fromId&&note.fromId!=='__manual__'?state.people.find(p=>p.id===note.fromId):null;
+    if(assignee?.email)recipients.push(assignee.email);
+    if(from?.email&&from.email!==assignee?.email)recipients.push(from.email);
+    if(note.authorEmail&&!recipients.includes(note.authorEmail))recipients.push(note.authorEmail);
+    if(!recipients.length)return;
+    const col=state.cols.find(c=>c.id===note.col);
+    const done=note.actions.filter(a=>a.done).length,total=note.actions.length;
+    const subject=pct===100?`[OBEYA] ✅ Toutes les actions accomplies : ${note.title}`:`[OBEYA] 🔄 Avancement ${pct}% : ${note.title}`;
+    const actRows=note.actions.map(a=>`<tr><td style="padding:3px 0;font-size:12px">${a.done?'✅':'⬜'}</td><td style="padding:3px 6px;font-size:12px;${a.done?'text-decoration:line-through;color:#9e9e9b':''}">${esc(a.text)}</td></tr>`).join('');
+    const body=`<div style="font-family:system-ui,sans-serif;max-width:520px;margin:0 auto;padding:24px;background:#f5f5f3;border-radius:10px"><div style="background:#fff;border-radius:8px;padding:20px 24px;border:1px solid #e0ddd6"><h2 style="font-size:16px;margin:0 0 4px;color:#1a1a18">${pct===100?'✅ Actions terminées':'🔄 Avancement des actions'}</h2><p style="font-size:13px;color:#6b6b68;margin:0 0 14px">Tâche : <strong>${esc(note.title)}</strong> — ${col?col.name:'?'}</p><div style="background:#f5f5f3;border-radius:6px;padding:12px;margin-bottom:14px"><div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:6px"><span>${done}/${total} actions</span><span style="font-weight:700;color:${pct===100?'#3B6D11':pct>=50?'#EF9F27':'#185FA5'}">${pct}%</span></div><div style="height:6px;border-radius:3px;background:#e0ddd6"><div style="height:6px;border-radius:3px;width:${pct}%;background:${pct===100?'#3B6D11':pct>=50?'#EF9F27':'#185FA5'}"></div></div></div><table style="width:100%;border-collapse:collapse">${actRows}</table><p style="font-size:11px;color:#9e9e9b;margin:18px 0 0">Envoyé automatiquement par le Tableau OBEYA</p></div></div>`;
+    await fetch(GRAPH+'/me/sendMail',{method:'POST',headers:{Authorization:'Bearer '+token,'Content-Type':'application/json'},body:JSON.stringify({message:{subject,body:{contentType:'HTML',content:body},toRecipients:recipients.map(r=>({emailAddress:{address:r}}))}})});
+  }catch(e){console.warn('[OBEYA] sendProgressNotification:',e.message);}
+}
+
+// ══════════════════════════════════════════════
+// PIÈCES JOINTES (base64 stockées dans le JSON SharePoint)
+// ══════════════════════════════════════════════
+const MAX_ATTACH_SIZE=4*1024*1024; // 4 Mo
+
+function renderModalAttachments(){
+  const el=document.getElementById('f-attach-list');if(!el)return;
+  el.innerHTML='';
+  modalAttachments.forEach((a,i)=>{
+    const div=document.createElement('div');div.className='attach-item';
+    div.innerHTML=`<span>📎</span><span class="attach-name" title="${esc(a.name)}">${esc(a.name)}</span><span class="attach-size">${formatSize(a.size||0)}</span><button class="del-attach" onclick="modalAttachments.splice(${i},1);renderModalAttachments()">✕</button>`;
+    el.appendChild(div);
+  });
+}
+function formatSize(b){if(b<1024)return b+'o';if(b<1024*1024)return Math.round(b/1024)+'ko';return (b/(1024*1024)).toFixed(1)+'Mo';}
+
+function handleAttachFiles(files){
+  Array.from(files).forEach(f=>{
+    if(f.size>MAX_ATTACH_SIZE){showToast(`❌ ${f.name} trop volumineux (max 4 Mo)`);return;}
+    const r=new FileReader();
+    r.onload=e=>{
+      modalAttachments.push({id:'att'+Date.now()+Math.random().toString(36).slice(2),name:f.name,type:f.type,size:f.size,data:e.target.result.split(',')[1]});
+      renderModalAttachments();
+    };
+    r.readAsDataURL(f);
+  });
+  document.getElementById('f-attach-input').value='';
+}
+function handleAttachDrop(e){
+  e.preventDefault();document.getElementById('f-attach-zone').classList.remove('dragover');
+  handleAttachFiles(e.dataTransfer.files);
+}
+function downloadAttachment(noteId,attId){
+  const note=state.notes.find(n=>n.id===parseInt(noteId));if(!note)return;
+  const att=(note.attachments||[]).find(a=>a.id===attId);if(!att)return;
+  const a=document.createElement('a');
+  a.href=`data:${att.type||'application/octet-stream'};base64,${att.data}`;
+  a.download=att.name;a.click();
 }
 
 async function deleteNote(id,e){

@@ -974,7 +974,7 @@ function openNoteReadonly(note){
   const atts=note.attachments||[];
   let attHtml='';
   if(atts.length>0){
-    attHtml=`<div class="field"><label>📎 Pièces jointes</label>`+atts.map(a=>`<div class="attach-item" style="cursor:pointer" onclick="downloadAttachment('${note.id}','${a.id}')"><span>📎</span><span class="attach-name">${esc(a.name)}</span><span class="attach-size">${formatSize(a.size||0)}</span><span style="font-size:10px;color:#185FA5">⬇️ Télécharger</span></div>`).join('')+'</div>';
+    attHtml=`<div class="field"><label>📎 Pièces jointes</label>`+atts.map(a=>`<div class="attach-item" style="cursor:pointer" onclick="downloadAttachment('${note.id}','${a.id}')"><span>📎</span><span class="attach-name">${esc(a.name)}</span><span class="attach-size">${formatSize(a.size||0)}</span><span style="font-size:10px;color:#185FA5">📂 Ouvrir</span></div>`).join('')+'</div>';
   }
   const ov=document.createElement('div');ov.className='overlay';ov.id='note-overlay';
   ov.innerHTML=`<div class="modal" onclick="event.stopPropagation()"><h3>📌 ${esc(note.title)}</h3><div class="readonly-notice">🔒 Vous n'êtes pas autorisé à modifier ce post-it.</div><div class="field"><label>Colonne</label><input disabled value="${col?esc(col.name):'—'}"></div><div class="field"><label>Description</label><textarea disabled style="resize:none">${esc(note.body||'—')}</textarea></div><div class="field"><label>Assigné à</label><input disabled value="${person?esc(person.name):'Non assigné'}"></div><div class="field"><label>De la part de</label><input disabled value="${from?esc(from.name):esc(note.from||'—')}"></div><div class="field"><label>Priorité</label><input disabled value="${note.prio||'normal'}"></div>${note.dueDate?`<div class="field"><label>📅 Échéance</label><input disabled value="${note.dueDate.split('-').reverse().join('/')}"></div>`:''}${dueBadgeHtml(note)}${actHtml}${cmHtml}${attHtml}<div class="modal-btns"><button class="btn btn-primary" onclick="closeNoteModal()">Fermer</button></div></div>`;
@@ -1204,7 +1204,7 @@ function renderModalAttachments(){
   el.innerHTML='';
   modalAttachments.forEach((a,i)=>{
     const div=document.createElement('div');div.className='attach-item';
-    div.innerHTML=`<span>📎</span><span class="attach-name" title="${esc(a.name)}">${esc(a.name)}</span><span class="attach-size">${formatSize(a.size||0)}</span><button class="del-attach" onclick="modalAttachments.splice(${i},1);renderModalAttachments()">✕</button>`;
+    div.innerHTML=`<span>📎</span><span class="attach-name" style="cursor:pointer;color:#185FA5" title="Ouvrir ${esc(a.name)}" onclick="openModalAttachment(${i})">${esc(a.name)}</span><span class="attach-size">${formatSize(a.size||0)}</span><button class="del-attach" title="Ouvrir" onclick="openModalAttachment(${i})">👁</button><button class="del-attach" title="Retirer" onclick="modalAttachments.splice(${i},1);renderModalAttachments()">✕</button>`;
     el.appendChild(div);
   });
 }
@@ -1226,13 +1226,29 @@ function handleAttachDrop(e){
   e.preventDefault();document.getElementById('f-attach-zone').classList.remove('dragover');
   handleAttachFiles(e.dataTransfer.files);
 }
+function attToBlobUrl(att){
+  const bin=atob(att.data);const bytes=new Uint8Array(bin.length);
+  for(let i=0;i<bin.length;i++)bytes[i]=bin.charCodeAt(i);
+  let type=att.type||'';
+  if(!type&&/\.pdf$/i.test(att.name))type='application/pdf';
+  return URL.createObjectURL(new Blob([bytes],{type:type||'application/octet-stream'}));
+}
+function openAttData(att){
+  if(!att||!att.data){showToast('Pièce jointe introuvable');return;}
+  const openable=/pdf|image\//i.test(att.type||'')||/\.(pdf|png|jpe?g|gif|webp|svg)$/i.test(att.name);
+  const url=attToBlobUrl(att);
+  if(openable){
+    const w=window.open(url,'_blank');
+    if(w){setTimeout(()=>URL.revokeObjectURL(url),60000);return;}
+  }
+  const a=document.createElement('a');a.href=url;a.download=att.name;document.body.appendChild(a);a.click();a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url),10000);
+}
 function downloadAttachment(noteId,attId){
   const note=state.notes.find(n=>n.id===parseInt(noteId));if(!note)return;
-  const att=(note.attachments||[]).find(a=>a.id===attId);if(!att)return;
-  const a=document.createElement('a');
-  a.href=`data:${att.type||'application/octet-stream'};base64,${att.data}`;
-  a.download=att.name;a.click();
+  openAttData((note.attachments||[]).find(a=>a.id===attId));
 }
+function openModalAttachment(i){openAttData(modalAttachments[i]);}
 
 async function deleteNote(id,e){
   if(e)e.stopPropagation();
